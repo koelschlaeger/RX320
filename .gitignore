@@ -1,0 +1,8 @@
+Docs/
+Misc/
+venv/
+
+__pycache__/
+
+.pylint.d
+.spyproject

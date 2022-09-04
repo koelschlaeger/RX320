@@ -1,0 +1,11 @@
+{
+	"folders":
+	[
+		{
+			"path": "."
+		}
+	],
+	"settings":	{
+		"python_interpreter": "./venv/bin/python3"
+	}
+}
