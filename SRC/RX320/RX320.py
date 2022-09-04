@@ -7,6 +7,7 @@ Created on Sun May  1 14:58:07 2022
 import serial
 import struct
 from queue import Queue
+from time import sleep
 
 # Get/Set functions should be thread-safe as they only append to the queue.
 # Still need to implement the way to call the _ServiceQueue() method either
@@ -105,9 +106,12 @@ class RX320():
         
         
     def CloseSerial(self):
+        self.QueueEnable = False
+        self.msgQueue.empty()
+        sleep(0.250)
         if self.com.is_open:
             self.com.close()
-        self.QueueEnable = False
+        
     
     def SetAttenuation(self, level=63, cmd='Both'):
         if ((level >= 0) and (level <= 63)):
