@@ -12,7 +12,7 @@ from tkinter import Menu
 from tkinter import messagebox as msg
 from threading import Thread
 from MySDR.MySDR import * # was SDR but apparently that is a namespace collision!?!
-from time import sleep
+
 
 Modes = ('AM', 'LSB', 'USB', 'CW')
 Target = ('Line', 'Speaker', 'Both')
@@ -38,7 +38,7 @@ class SDR_GUI():    # Was GUI but apparently that is a namespace collision!?!
         
         # Create SDR instance
         #self.sdr = MySDR('COM3')
-        self.sdr = MySDR('/dev/cu.usbserial-AB0N3GLA')
+        self.sdr = MySDR('/dev/tty.usbserial-AB0N3GLA')
 
         # Create window instance
         self.win = tk.Tk()
@@ -83,7 +83,7 @@ class SDR_GUI():    # Was GUI but apparently that is a namespace collision!?!
         
     def _connect(self):
         # SerialThread is linked to sdr.Connect() and will be started as a daemon
-        self.MySerialThread = Thread(target=self.sdr.Connect())
+        self.MySerialThread = Thread(target=self.sdr.Connect)
         self.MySerialThread.start()
         
     def _disconnect(self):
