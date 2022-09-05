@@ -38,7 +38,7 @@ class SDR_GUI():    # Was GUI but apparently that is a namespace collision!?!
         
         # Create SDR instance
         #self.sdr = MySDR('COM3')
-        self.sdr = MySDR('/dev/tty.usbserial-AB0N3GLA')
+        self.sdr = MySDR()
 
         # Create window instance
         self.win = tk.Tk()
@@ -82,9 +82,7 @@ class SDR_GUI():    # Was GUI but apparently that is a namespace collision!?!
         msg.showinfo('About RX320', 'A GUI for the Ten-Tec RX320\nDeveloped by Karl Oelschlaeger\nCopyright 2022, Creative Commons 2.0')
         
     def _connect(self):
-        # SerialThread is linked to sdr.Connect() and will be started as a daemon
-        self.MySerialThread = Thread(target=self.sdr.Connect)
-        self.MySerialThread.start()
+        self.sdr.Connect('/dev/tty.usbserial-AB0N3GLA')
         
     def _disconnect(self):
         self.sdr.Disconnect()
