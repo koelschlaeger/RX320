@@ -170,12 +170,14 @@ class MainWindow(QDialog):
         self.sliderLine.setTickInterval(12)
         self.sliderLine.setTickPosition(QSlider.TicksLeft)
         self.sliderLine.setValue(-64)
+        self.sliderLine.valueChanged.connect(self.sliderLine_ValueChange)
 
         self.sliderVol = QSlider(Qt.Vertical, self.sliderGroupBox)
         self.sliderVol.setRange(-96, 0)
         self.sliderVol.setTickInterval(12)
         self.sliderVol.setTickPosition(QSlider.TicksLeft)
         self.sliderVol.setValue(-64)
+        self.sliderVol.valueChanged.connect(self.sliderVol_ValueChange)
 
         self.sliderBW = QSlider(Qt.Vertical, self.sliderGroupBox)
         self.sliderBW.setRange(0,31)
@@ -185,7 +187,8 @@ class MainWindow(QDialog):
         self.sliderPBT.setRange(0,300)
         self.sliderPBT.setValue(0)
 
-        checkBoxLink = QCheckBox("&Link")
+        self.checkBoxLink = QCheckBox("&Link")
+        self.checkBoxLink.toggled.connect(self.checkBoxLink_Toggled)
 
         layout = QGridLayout()
         layout.addWidget(labelLine, 0, 0)
@@ -194,7 +197,7 @@ class MainWindow(QDialog):
         layout.addWidget(labelPBT, 0, 3)
         layout.addWidget(self.sliderLine, 1, 0)
         layout.addWidget(self.sliderVol, 1, 1)
-        layout.addWidget(checkBoxLink, 2, 0, 1, 2)
+        layout.addWidget(self.checkBoxLink, 2, 0, 1, 2)
         layout.addWidget(self.sliderBW, 1, 2, 2, 1)
         layout.addWidget(self.sliderPBT, 1, 3, 2, 1)
         #layout.setRowStretch(5, 1)
@@ -241,8 +244,24 @@ class MainWindow(QDialog):
     def pushButtonMute_Clicked(self):
         self.sliderLine.setValue(-96)
         self.sliderVol.setValue(-96)
-        self.sdr.SetAttenuation(-96, 'Both')
+        # self.sdr.SetAttenuation(-96, 'Both')
     
+    def sliderLine_ValueChange(self):
+        if self.checkBoxLink.isChecked():
+            self.sliderVol.setValue(self.sliderLine.value())
+        self.sdr.SetAttenuation(self.sliderLine.value(), 'Line')
+        
+    def sliderVol_ValueChange(self):
+        if self.checkBoxLink.isChecked():
+            self.sliderLine.setValue(self.sliderVol.value())
+        self.sdr.SetAttenuation(self.sliderVol.value(), 'Speaker')
+
+    def checkBoxLink_Toggled(self):
+        if self.checkBoxLink.isChecked():
+            Min = min(self.sliderVol.value(), self.sliderLine.value())
+            self.sliderVol.setValue(Min)
+            self.sliderLine.setValue(Min)
+
     def enableControls(self):
         self.modeGroupBox.setDisabled(False)
         self.agcGroupBox.setDisabled(False)
