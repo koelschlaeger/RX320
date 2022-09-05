@@ -18,10 +18,11 @@ class MySDR(): # was SDR but apparently that is a namespace collision!?!
     AGC = 'Medium'             # 'Medium'
     Connected = False
     
-    def __init__(self, comPort='/dev/cu.usbserial-AB0N3GLA'):
-        self.sdr = RX320(comPort)
+    def __init__(self):
+        self.Connected = False
         
-    def Connect(self):
+    def Connect(self, comPort='/dev/cu.usbserial-AB0N3GLA'):
+        self.sdr = RX320(comPort)
         self.Connected = self.sdr.OpenSerial()
         
     def Disconnect(self):
