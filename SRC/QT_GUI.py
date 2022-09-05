@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 from PyQt5 import * 
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap, QDoubleValidator
 from PyQt5.QtCore import QDateTime, Qt, QTimer, QSize
 from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QDateTimeEdit,
         QDial, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-        QProgressBar, QPushButton, QRadioButton, QScrollBar, QSizePolicy,
+        QProgressBar, QPushButton, QRadioButton, QButtonGroup, QSizePolicy,
         QSlider, QSpinBox, QStyleFactory, QTableWidget, QTabWidget, QTextEdit,
         QVBoxLayout, QWidget)
 #from PyQt5.QtChart import (QChart, QChartView, QHorizontalBarSeries, QBarSet, 
@@ -17,10 +17,20 @@ from MySDR.MySDR import * # was SDR but apparently that is a namespace collision
 Modes = ('AM', 'LSB', 'USB', 'CW')
 Target = ('Line', 'Speaker', 'Both')
 AGCModes = ('Slow', 'Medium', 'Fast')
+TuningSteps = (10.0, 100.0, 1000.0, 5000.0, 10000.0)
+Filters = (300, 330, 375, 450, 525, 600, 675, 750, 900, 1050, 1200,
+    1350, 1500, 1650, 1800, 1950, 2100, 2250, 2400, 2550, 2700, 2850,
+    3000, 3300, 3600, 3900, 4200, 4500, 4800, 5100, 5400, 5700, 6000, 8000)
 
 class MainWindow(QDialog):
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
+        # Create SDR instance
+        self.sdr = MySDR()
+        self.VFO_A = 0.500;     # MHz
+        self.VFO_B = 0.500;     # MHz
+        self.dialStart = 0
+        self.dialStop = 0
 
         self.createModeGroupBox()
         self.createAGCGroupBox()
@@ -44,8 +54,8 @@ class MainWindow(QDialog):
         self.setWindowTitle("RX320")
 
         self.disableControls()
-        # Create SDR instance
-        self.sdr = MySDR()
+        
+        self.tuningStepMHz = TuningSteps[self.stepButtonGroup.checkedId()] / 1000000.0
 
     def createTopLayout(self):
         labelLogo = QLabel()
@@ -59,12 +69,20 @@ class MainWindow(QDialog):
     def createBottomLayout(self):
         self.bottomLayout = QHBoxLayout()
         pushButtonQuit = QPushButton('Quit')
+        pushButtonQuit.setDefault(False)
+        pushButtonQuit.setAutoDefault(False)
         pushButtonQuit.clicked.connect(self._quit)
         pushButtonConnect = QPushButton('Connect')
+        pushButtonConnect.setDefault(False)
+        pushButtonConnect.setAutoDefault(False)
         pushButtonConnect.clicked.connect(self._connect)
         pushButtonDisconnect = QPushButton('Disconnect')
+        pushButtonDisconnect.setDefault(False)
+        pushButtonDisconnect.setAutoDefault(False)
         pushButtonDisconnect.clicked.connect(self._disconnect)
         self.pushButtonMute = QPushButton('Mute')
+        self.pushButtonMute.setDefault(False)
+        self.pushButtonMute.setAutoDefault(False)
         self.pushButtonMute.clicked.connect(self.pushButtonMute_Clicked)
         self.bottomLayout.addWidget(pushButtonQuit)
         self.bottomLayout.addWidget(pushButtonConnect)
@@ -79,6 +97,13 @@ class MainWindow(QDialog):
         radioButton3 = QRadioButton("USB")
         radioButton4 = QRadioButton("CW")
         radioButton1.setChecked(True)
+
+        self.modeButtonGroup = QButtonGroup(self)
+        self.modeButtonGroup.addButton(radioButton1, 0)
+        self.modeButtonGroup.addButton(radioButton2, 1)
+        self.modeButtonGroup.addButton(radioButton3, 2)
+        self.modeButtonGroup.addButton(radioButton4, 3)
+        self.modeButtonGroup.buttonClicked.connect(self.modeButtonGroup_ButtonClicked)
 
         layout = QVBoxLayout()
         layout.addWidget(radioButton1)
@@ -96,6 +121,12 @@ class MainWindow(QDialog):
         radioButton3 = QRadioButton("Fast")
         radioButton2.setChecked(True)
 
+        self.agcButtonGroup = QButtonGroup(self)
+        self.agcButtonGroup.addButton(radioButton1, 0)
+        self.agcButtonGroup.addButton(radioButton2, 1)
+        self.agcButtonGroup.addButton(radioButton3, 2)
+        self.agcButtonGroup.buttonClicked.connect(self.agcButtonGroup_ButtonClicked)
+
         layout = QVBoxLayout()
         layout.addWidget(radioButton1)
         layout.addWidget(radioButton2)
@@ -108,30 +139,51 @@ class MainWindow(QDialog):
 
         pushButtonStepUpUp = QPushButton()
         pushButtonStepUpUp.setIcon(QIcon('IMG/up2.xpm'))
+        pushButtonStepUpUp.setDefault(False)
+        pushButtonStepUpUp.setAutoDefault(False)
+        pushButtonStepUpUp.clicked.connect(lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * 10.0))
 
         pushButtonStepUp = QPushButton()
         pushButtonStepUp.setIcon(QIcon('IMG/up.xpm'))
+        pushButtonStepUp.setDefault(False)
+        pushButtonStepUp.setAutoDefault(False)
+        pushButtonStepUp.clicked.connect(lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * 1.0))
 
         pushButtonStepDownDown = QPushButton()
         pushButtonStepDownDown.setIcon(QIcon('IMG/down2.xpm'))
+        pushButtonStepDownDown.setDefault(False)
+        pushButtonStepDownDown.setAutoDefault(False)
+        pushButtonStepDownDown.clicked.connect(lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * -10.0))
 
         pushButtonStepDown = QPushButton()
         pushButtonStepDown.setIcon(QIcon('IMG/down.xpm'))
+        pushButtonStepDown.setDefault(False)
+        pushButtonStepDown.setAutoDefault(False)
+        pushButtonStepDown.clicked.connect(lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * -1.0))
 
         pushButtonVFOSwap = QPushButton('A / B')
+        pushButtonVFOSwap.setDefault(False)
+        pushButtonVFOSwap.setAutoDefault(False)
+        pushButtonVFOSwap.clicked.connect(self.pushButtonVFOSwap_ButtonClicked)
         pushButtonVFOStore = QPushButton('A -> B')
+        pushButtonVFOStore.setDefault(False)
+        pushButtonVFOStore.setAutoDefault(False)
+        pushButtonVFOStore.clicked.connect(self.pushButtonVFOStore_ButtonClicked)
 
-        dial = QDial(self.vfoGroupBox)
-        dial.setValue(30)
-        dial.setNotchesVisible(True)
-        dial.setWrapping(True)
+        self.dial = QDial(self.vfoGroupBox)
+        self.dial.setValue(0)
+        self.dial.setMinimum(-100)
+        self.dial.setMaximum(100)
+        self.dial.setNotchesVisible(True)
+        self.dial.setWrapping(True)
+        self.dial.valueChanged.connect(self.dial_ValueChanged)
 
         layout = QGridLayout()
         layout.addWidget(pushButtonStepUpUp, 0, 0)
         layout.addWidget(pushButtonStepUp, 1, 0)
         layout.addWidget(pushButtonStepDown, 2, 0)
         layout.addWidget(pushButtonStepDownDown, 3, 0)
-        layout.addWidget(dial, 0, 1, 4, 3)
+        layout.addWidget(self.dial, 0, 1, 4, 3)
         layout.addWidget(pushButtonVFOStore, 4, 0, 1, 2)
         layout.addWidget(pushButtonVFOSwap, 4, 2, 1, 2)
         #layout.setRowStretch(5, 1)
@@ -148,6 +200,14 @@ class MainWindow(QDialog):
         radioButton4 = QRadioButton("5 kHz")
         radioButton5 = QRadioButton("10 kHz")
         radioButton4.setChecked(True)
+
+        self.stepButtonGroup = QButtonGroup(self)
+        self.stepButtonGroup.addButton(radioButton1, 0)
+        self.stepButtonGroup.addButton(radioButton2, 1)
+        self.stepButtonGroup.addButton(radioButton3, 2)
+        self.stepButtonGroup.addButton(radioButton4, 3)
+        self.stepButtonGroup.addButton(radioButton5, 4)
+        self.stepButtonGroup.buttonClicked.connect(self.stepButtonGroup_ButtonClicked)
 
         layout.addWidget(radioButton1)
         layout.addWidget(radioButton2)
@@ -167,21 +227,22 @@ class MainWindow(QDialog):
 
         self.sliderLine = QSlider(Qt.Vertical, self.sliderGroupBox)
         self.sliderLine.setRange(-96, 0)
-        self.sliderLine.setTickInterval(12)
+        #self.sliderLine.setTickInterval(-12)
         self.sliderLine.setTickPosition(QSlider.TicksLeft)
-        self.sliderLine.setValue(-64)
+        self.sliderLine.setValue(-96)
         self.sliderLine.valueChanged.connect(self.sliderLine_ValueChange)
 
         self.sliderVol = QSlider(Qt.Vertical, self.sliderGroupBox)
         self.sliderVol.setRange(-96, 0)
-        self.sliderVol.setTickInterval(12)
+        #self.sliderVol.setTickInterval(-12)
         self.sliderVol.setTickPosition(QSlider.TicksLeft)
-        self.sliderVol.setValue(-64)
+        self.sliderVol.setValue(-96)
         self.sliderVol.valueChanged.connect(self.sliderVol_ValueChange)
 
         self.sliderBW = QSlider(Qt.Vertical, self.sliderGroupBox)
-        self.sliderBW.setRange(0,31)
-        self.sliderBW.setValue(31)
+        self.sliderBW.setRange(0,33)
+        self.sliderBW.setValue(33)
+        self.sliderBW.valueChanged.connect(self.sliderBW_ValueChange)
 
         self.sliderPBT = QSlider(Qt.Vertical, self.sliderGroupBox)
         self.sliderPBT.setRange(0,300)
@@ -210,9 +271,24 @@ class MainWindow(QDialog):
         labelMode = QLabel('Mode: ')
         labelAGC = QLabel('AGC: ')
         labelBW = QLabel('BW: ')
-        labelVFOA = QLabel('VFO A: 0.000.000')
-        labelVFOB = QLabel('VFO B: 0.000.000')
+        labelVFOA = QLabel('VFO A: ')
+        labelVFOB = QLabel('VFO B: ')
+        
+        self.lineEditVFOA = QLineEdit(self)
+        self.lineEditVFOA.setValidator(QDoubleValidator())
+        self.lineEditVFOA.returnPressed.connect(self.lineEditVFOA_ReturnPressed)
+        self.lineEditVFOA.setText(f'{self.VFO_A:6f}')
 
+        self.lineEditVFOB = QLineEdit(self)
+        self.lineEditVFOB.setText(f'{self.VFO_B:6f}')
+        self.lineEditVFOB.setDisabled(True)
+
+        self.labelMode_Act = QLabel()
+        self.labelMode_Act.setText(Modes[self.modeButtonGroup.checkedId()])
+        self.labelAGC_Act = QLabel()
+        self.labelAGC_Act.setText(AGCModes[self.agcButtonGroup.checkedId()])
+        self.labelBW_Act = QLabel()
+        self.labelBW_Act.setText(str(Filters[self.sliderBW.value()]))
         # set0 = QBarSet('X0')
         # set0.append([1, 2, 3, 4, 5, 6])
 
@@ -231,20 +307,41 @@ class MainWindow(QDialog):
         # chartView = QChartView(chart)
 
         layout = QGridLayout()
-        layout.addWidget(labelVFOA, 0, 0, 2, 2)
-        layout.addWidget(labelVFOB, 2, 0, 2, 2)
+        layout.addWidget(labelVFOA, 0, 0, 2, 1)
+        layout.addWidget(self.lineEditVFOA, 0, 1, 2, 1)
+        layout.addWidget(labelVFOB, 2, 0, 2, 1)
+        layout.addWidget(self.lineEditVFOB, 2, 1, 2, 1)
         layout.addWidget(labelMode, 0, 2)
         layout.addWidget(labelAGC, 1, 2)
         layout.addWidget(labelBW, 2, 2)
+        layout.addWidget(self.labelMode_Act, 0, 3)
+        layout.addWidget(self.labelAGC_Act, 1, 3)
+        layout.addWidget(self.labelBW_Act, 2, 3)
         # layout.addWidget(chartView, 0, 3, 4, 3)
 
 
         self.statusGroupBox.setLayout(layout)
 
+    def lineEditVFOA_ReturnPressed(self):
+        tempVFO = float(self.lineEditVFOA.text())
+
+        if tempVFO < self.sdr.sdr.MinFreq:
+            tempVFO = self.sdr.sdr.MinFreq
+        
+        if tempVFO > self.sdr.sdr.MaxFreq:
+            tempVFO = self.sdr.sdr.MaxFreq
+
+        self.sdr.SetVFO(tempVFO)
+        self.VFO_A = tempVFO
+
     def pushButtonMute_Clicked(self):
         self.sliderLine.setValue(-96)
         self.sliderVol.setValue(-96)
-        # self.sdr.SetAttenuation(-96, 'Both')
+    
+    def dial_ValueChanged(self):
+        self.dialStop = self.dial.value()
+        delta = self.dialStop - self.dialStart
+        self.dialStart = self.dialStop
     
     def sliderLine_ValueChange(self):
         if self.checkBoxLink.isChecked():
@@ -256,11 +353,55 @@ class MainWindow(QDialog):
             self.sliderLine.setValue(self.sliderVol.value())
         self.sdr.SetAttenuation(self.sliderVol.value(), 'Speaker')
 
+    def sliderBW_ValueChange(self):
+        id = self.sliderBW.value()
+        self.sdr.SetFilter(Filters[id])
+        self.labelBW_Act.setText(str(Filters[id]))
+
     def checkBoxLink_Toggled(self):
         if self.checkBoxLink.isChecked():
             Min = min(self.sliderVol.value(), self.sliderLine.value())
             self.sliderVol.setValue(Min)
             self.sliderLine.setValue(Min)
+
+    def modeButtonGroup_ButtonClicked(self):
+        id = self.modeButtonGroup.checkedId()
+        self.sdr.SetMode(Modes[id])
+        self.labelMode_Act.setText(Modes[id])
+
+    def agcButtonGroup_ButtonClicked(self):
+        id = self.agcButtonGroup.checkedId()
+        self.sdr.SetAGC(AGCModes[id])
+        self.labelAGC_Act.setText(AGCModes[id])
+
+    def stepButtonGroup_ButtonClicked(self):
+        id = self.stepButtonGroup.checkedId()
+        self.tuningStepMHz = TuningSteps[id] / 1000000.0
+
+    def pushButtonStep_ButtonClicked(self, step):
+        tempVFO = self.VFO_A + step
+
+        if tempVFO < self.sdr.sdr.MinFreq:
+            tempVFO = self.sdr.sdr.MinFreq
+        
+        if tempVFO > self.sdr.sdr.MaxFreq:
+            tempVFO = self.sdr.sdr.MaxFreq
+
+        self.sdr.SetVFO(tempVFO)
+        self.VFO_A = tempVFO
+        self.lineEditVFOA.setText(f'{self.VFO_A:6f}')
+
+    def pushButtonVFOStore_ButtonClicked(self):
+        self.VFO_B = self.VFO_A
+        self.lineEditVFOB.setText(f'{self.VFO_B:6f}')
+
+    def pushButtonVFOSwap_ButtonClicked(self):
+        tempVFO = self.VFO_A
+        self.VFO_A = self.VFO_B
+        self.VFO_B = tempVFO
+        self.sdr.SetVFO(self.VFO_A)
+        self.lineEditVFOA.setText(f'{self.VFO_A:6f}')
+        self.lineEditVFOB.setText(f'{self.VFO_B:6f}')
 
     def enableControls(self):
         self.modeGroupBox.setDisabled(False)
@@ -269,6 +410,7 @@ class MainWindow(QDialog):
         self.vfoGroupBox.setDisabled(False)
         self.sliderGroupBox.setDisabled(False)
         self.pushButtonMute.setDisabled(False)
+        self.lineEditVFOA.setDisabled(False)
 
     def disableControls(self):
         self.modeGroupBox.setDisabled(True)
@@ -277,6 +419,7 @@ class MainWindow(QDialog):
         self.vfoGroupBox.setDisabled(True)
         self.sliderGroupBox.setDisabled(True)
         self.pushButtonMute.setDisabled(True)
+        self.lineEditVFOA.setDisabled(True)
 
     def _quit(self):
         # Check if serial port still in use
