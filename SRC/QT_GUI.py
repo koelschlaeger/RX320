@@ -11,7 +11,8 @@ from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QDateTimeEdit,
 #from PyQt5.QtChart import (QChart, QChartView, QHorizontalBarSeries, QBarSet, 
 #        QBarCategoryAxis, QValueAxis)
 
-import sys
+import sys, glob
+from MySDR.MySDR import * # was SDR but apparently that is a namespace collision!?!
 
 Modes = ('AM', 'LSB', 'USB', 'CW')
 Target = ('Line', 'Speaker', 'Both')
@@ -42,6 +43,10 @@ class MainWindow(QDialog):
         self.setLayout(mainLayout)
         self.setWindowTitle("RX320")
 
+        self.disableControls()
+        # Create SDR instance
+        self.sdr = MySDR()
+
     def createTopLayout(self):
         labelLogo = QLabel()
         labelLogo.setPixmap(QPixmap('IMG/ttrx320.xpm'))
@@ -54,9 +59,17 @@ class MainWindow(QDialog):
     def createBottomLayout(self):
         self.bottomLayout = QHBoxLayout()
         pushButtonQuit = QPushButton('Quit')
-        pushButtonMute = QPushButton('Mute')
+        pushButtonQuit.clicked.connect(self._quit)
+        pushButtonConnect = QPushButton('Connect')
+        pushButtonConnect.clicked.connect(self._connect)
+        pushButtonDisconnect = QPushButton('Disconnect')
+        pushButtonDisconnect.clicked.connect(self._disconnect)
+        self.pushButtonMute = QPushButton('Mute')
+        self.pushButtonMute.clicked.connect(self.pushButtonMute_Clicked)
         self.bottomLayout.addWidget(pushButtonQuit)
-        self.bottomLayout.addWidget(pushButtonMute)
+        self.bottomLayout.addWidget(pushButtonConnect)
+        self.bottomLayout.addWidget(pushButtonDisconnect)
+        self.bottomLayout.addWidget(self.pushButtonMute)
         
     def createModeGroupBox(self):
         self.modeGroupBox = QGroupBox("Mode")
@@ -152,25 +165,25 @@ class MainWindow(QDialog):
         labelBW = QLabel('BW')
         labelPBT = QLabel('PBT')
 
-        sliderLine = QSlider(Qt.Vertical, self.sliderGroupBox)
-        sliderLine.setRange(-96, 0)
-        sliderLine.setTickInterval(12)
-        sliderLine.setTickPosition(QSlider.TicksLeft)
-        sliderLine.setValue(-64)
+        self.sliderLine = QSlider(Qt.Vertical, self.sliderGroupBox)
+        self.sliderLine.setRange(-96, 0)
+        self.sliderLine.setTickInterval(12)
+        self.sliderLine.setTickPosition(QSlider.TicksLeft)
+        self.sliderLine.setValue(-64)
 
-        sliderVol = QSlider(Qt.Vertical, self.sliderGroupBox)
-        sliderVol.setRange(-96, 0)
-        sliderVol.setTickInterval(12)
-        sliderVol.setTickPosition(QSlider.TicksLeft)
-        sliderVol.setValue(-64)
+        self.sliderVol = QSlider(Qt.Vertical, self.sliderGroupBox)
+        self.sliderVol.setRange(-96, 0)
+        self.sliderVol.setTickInterval(12)
+        self.sliderVol.setTickPosition(QSlider.TicksLeft)
+        self.sliderVol.setValue(-64)
 
-        sliderBW = QSlider(Qt.Vertical, self.sliderGroupBox)
-        sliderBW.setRange(0,31)
-        sliderBW.setValue(31)
+        self.sliderBW = QSlider(Qt.Vertical, self.sliderGroupBox)
+        self.sliderBW.setRange(0,31)
+        self.sliderBW.setValue(31)
 
-        sliderPBT = QSlider(Qt.Vertical, self.sliderGroupBox)
-        sliderPBT.setRange(0,300)
-        sliderPBT.setValue(0)
+        self.sliderPBT = QSlider(Qt.Vertical, self.sliderGroupBox)
+        self.sliderPBT.setRange(0,300)
+        self.sliderPBT.setValue(0)
 
         checkBoxLink = QCheckBox("&Link")
 
@@ -179,11 +192,11 @@ class MainWindow(QDialog):
         layout.addWidget(labelVol, 0, 1)
         layout.addWidget(labelBW, 0, 2)
         layout.addWidget(labelPBT, 0, 3)
-        layout.addWidget(sliderLine, 1, 0)
-        layout.addWidget(sliderVol, 1, 1)
+        layout.addWidget(self.sliderLine, 1, 0)
+        layout.addWidget(self.sliderVol, 1, 1)
         layout.addWidget(checkBoxLink, 2, 0, 1, 2)
-        layout.addWidget(sliderBW, 1, 2, 2, 1)
-        layout.addWidget(sliderPBT, 1, 3, 2, 1)
+        layout.addWidget(self.sliderBW, 1, 2, 2, 1)
+        layout.addWidget(self.sliderPBT, 1, 3, 2, 1)
         #layout.setRowStretch(5, 1)
 
         self.sliderGroupBox.setLayout(layout)
@@ -224,6 +237,77 @@ class MainWindow(QDialog):
 
 
         self.statusGroupBox.setLayout(layout)
+
+    def pushButtonMute_Clicked(self):
+        self.sliderLine.setValue(-96)
+        self.sliderVol.setValue(-96)
+        self.sdr.SetAttenuation(-96, 'Both')
+    
+    def enableControls(self):
+        self.modeGroupBox.setDisabled(False)
+        self.agcGroupBox.setDisabled(False)
+        self.stepGroupBox.setDisabled(False)
+        self.vfoGroupBox.setDisabled(False)
+        self.sliderGroupBox.setDisabled(False)
+        self.pushButtonMute.setDisabled(False)
+
+    def disableControls(self):
+        self.modeGroupBox.setDisabled(True)
+        self.agcGroupBox.setDisabled(True)
+        self.stepGroupBox.setDisabled(True)
+        self.vfoGroupBox.setDisabled(True)
+        self.sliderGroupBox.setDisabled(True)
+        self.pushButtonMute.setDisabled(True)
+
+    def _quit(self):
+        # Check if serial port still in use
+        if self.sdr.Connected:
+            self._disconnect()
+        
+        # QApplication.instance().quit()
+        self.close()
+    
+    def _connect(self):
+        # Get Serial Ports
+        serialPorts = getSerialPorts()
+        self.sdr.Connect('/dev/tty.usbserial-AB0N3GLA')
+        
+        # Enable control surfaces
+        self.enableControls()
+
+    def _disconnect(self):
+        # Disable control surfaces
+        self.disableControls()
+
+        # Check if serial port still in use
+        if self.sdr.Connected:
+            self.sdr.Disconnect()
+
+def getSerialPorts():
+    # Lists serial port names
+    #     :raises EnvironmentError:
+    #         On unsupported or unknown platforms
+    #     :returns:
+    #         A list of the serial ports available on the system
+    if sys.platform.startswith('win'):
+        ports = ['COM%s' % (i + 1) for i in range(256)]
+    elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
+        # this excludes your current terminal "/dev/tty"
+        ports = glob.glob('/dev/tty[A-Za-z]*')
+    elif sys.platform.startswith('darwin'):
+        ports = glob.glob('/dev/tty.*')
+    else:
+        raise EnvironmentError('Unsupported platform')
+
+    result = []
+    for port in ports:
+        try:
+            s = serial.Serial(port)
+            s.close()
+            result.append(port)
+        except (OSError, serial.SerialException):
+            pass
+    return result
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
