@@ -4,10 +4,12 @@ Created on Sun May  1 14:58:07 2022
 
 @author: KOelschlaeger
 """
+from ntpath import join
 import serial
 import struct
 from queue import Queue
 from time import sleep
+from threading import Thread
 
 # Get/Set functions should be thread-safe as they only append to the queue.
 # Still need to implement the way to call the _ServiceQueue() method either
@@ -101,16 +103,21 @@ class RX320():
                 return False
             self._PowerUp()
         
-        self._ServiceQueue()
+        self.queueThread = Thread(target=self._ServiceQueue)
+        self.queueThread.start()
         return True
         
         
     def CloseSerial(self):
         self.QueueEnable = False
-        self.msgQueue.empty()
-        sleep(0.250)
+        with self.msgQueue.mutex:
+            self.msgQueue.queue.clear()
+        
+        sleep(0.5)
         if self.com.is_open:
             self.com.close()
+
+        self.queueThread.join()
         
     
     def SetAttenuation(self, level=63, cmd='Both'):
@@ -208,8 +215,8 @@ class RX320():
         if self.com.is_open:
             FS = str(len(cmd)) + 'sc'
             self.com.write(struct.pack(FS, cmd, b'\r'))
-            ret = self.com.readline()
             try:
+                ret = self.com.readline()
                 value = struct.unpack('>cHc', ret)
             except:
                 value = ([0, 0, 0])
