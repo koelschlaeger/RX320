@@ -12,6 +12,11 @@ class RadioController:
     def _clamp(self, freq_mhz: float) -> float:
         return max(self.sdr.MinFreq, min(self.sdr.MaxFreq, freq_mhz))
 
+    def restore(self, vfo_a: float, vfo_b: float):
+        """Set both VFOs (clamped) without sending anything to the radio."""
+        self.vfo_a = self._clamp(vfo_a)
+        self.vfo_b = self._clamp(vfo_b)
+
     def set_vfo_a(self, freq_mhz: float) -> float:
         """Set VFO A to an absolute frequency (clamped). Returns the applied value."""
         self.vfo_a = self._clamp(freq_mhz)

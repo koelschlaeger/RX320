@@ -2,7 +2,7 @@
 
 import serial
 from PyQt6.QtGui import QIcon, QPixmap
-from PyQt6.QtCore import Qt, QSignalBlocker, QTimer
+from PyQt6.QtCore import Qt, QByteArray, QSettings, QSignalBlocker, QTimer
 from PyQt6.QtWidgets import (QAbstractSpinBox, QCheckBox, QComboBox, QDial,
         QDoubleSpinBox, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
         QMainWindow, QMessageBox, QPushButton, QRadioButton, QButtonGroup,
@@ -11,6 +11,11 @@ from PyQt6.QtWidgets import (QAbstractSpinBox, QCheckBox, QComboBox, QDial,
 from .constants import IMG_DIR, TuningSteps
 from .radio_controller import RadioController
 from .serial_utils import get_serial_ports
+
+
+# QSettings (organization, application): stored in ~/.config/RX320/RX320.conf
+# on Linux
+SETTINGS_SCOPE = ('RX320', 'RX320')
 
 
 def _format_hz(hz):
@@ -80,7 +85,9 @@ class MainWindow(QMainWindow):
 
         self.set_controls_enabled(False)
 
+        self._restore_settings()
         self.on_step_changed(self.stepButtonGroup.checkedId())
+        self._refresh_labels()
 
     def _make_button(self, text='', icon=None, slot=None) -> QPushButton:
         btn = QPushButton(text)
@@ -256,12 +263,10 @@ class MainWindow(QMainWindow):
         self._show_vfo()
         self.spinBoxVFOA.valueChanged.connect(self.on_vfo_a_changed)
 
+        # Filled in by _refresh_labels() once settings are restored
         self.labelMode_Act = QLabel()
-        self.labelMode_Act.setText(self.Modes[self.modeButtonGroup.checkedId()])
         self.labelAGC_Act = QLabel()
-        self.labelAGC_Act.setText(self.AGCModes[self.agcButtonGroup.checkedId()])
         self.labelBW_Act = QLabel()
-        self.labelBW_Act.setText(str(self.Filters[self.sliderBW.value()]))
 
         layout = QGridLayout()
         layout.addWidget(labelVFOA, 0, 0, 2, 1)
@@ -362,8 +367,73 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         # Quit and the window's X button both end up here
+        self._save_settings()
         self._disconnect()
         super().closeEvent(event)
+
+    def _refresh_labels(self):
+        self.labelMode_Act.setText(self.Modes[self.modeButtonGroup.checkedId()])
+        self.labelAGC_Act.setText(self.AGCModes[self.agcButtonGroup.checkedId()])
+        self.labelBW_Act.setText(str(self.Filters[self.sliderBW.value()]))
+
+    def _save_settings(self):
+        # Choices are stored by value (e.g. 'USB', 3000 Hz), not by position.
+        # Volume is deliberately not saved: the app always starts muted.
+        settings = QSettings(*SETTINGS_SCOPE)
+        settings.setValue('window/geometry', self.saveGeometry())
+        settings.setValue('serial/port', self.comboBoxSerialPort.currentText())
+        settings.setValue('vfo/a', self.radio.vfo_a)
+        settings.setValue('vfo/b', self.radio.vfo_b)
+        settings.setValue('radio/mode', self.Modes[self.modeButtonGroup.checkedId()])
+        settings.setValue('radio/agc', self.AGCModes[self.agcButtonGroup.checkedId()])
+        settings.setValue('radio/filter', self.Filters[self.sliderBW.value()])
+        settings.setValue('tuning/step', TuningSteps[self.stepButtonGroup.checkedId()])
+        settings.setValue('audio/link', self.checkBoxLink.isChecked())
+
+    def _restore_settings(self):
+        # Runs before any radio is connected, so it only updates widgets
+        # (with signals blocked); _sync_radio_to_gui() sends them on connect.
+        # Missing or unrecognised values leave the defaults in place.
+        settings = QSettings(*SETTINGS_SCOPE)
+
+        def read(key, value_type, default=None):
+            # Missing keys and unconvertible values (e.g. a hand-edited file)
+            # both give the default instead of stopping the app from starting
+            if not settings.contains(key):
+                return default
+            try:
+                return settings.value(key, type=value_type)
+            except TypeError:
+                return default
+
+        geometry = read('window/geometry', QByteArray)
+        if geometry:
+            self.restoreGeometry(geometry)  # Ignores invalid data
+
+        port = read('serial/port', str)
+        if port and self.comboBoxSerialPort.findText(port) >= 0:
+            self.comboBoxSerialPort.setCurrentText(port)
+
+        self.radio.restore(read('vfo/a', float, self.radio.vfo_a),
+                           read('vfo/b', float, self.radio.vfo_b))
+        self._show_vfo()
+
+        def restore_choice(key, choices, button_group, value_type):
+            value = read(key, value_type)
+            if value in choices:
+                button_group.button(choices.index(value)).setChecked(True)
+
+        restore_choice('radio/mode', self.Modes, self.modeButtonGroup, str)
+        restore_choice('radio/agc', self.AGCModes, self.agcButtonGroup, str)
+        restore_choice('tuning/step', TuningSteps, self.stepButtonGroup, float)
+
+        bandwidth = read('radio/filter', int)
+        if bandwidth in self.Filters:
+            with QSignalBlocker(self.sliderBW):
+                self.sliderBW.setValue(self.Filters.index(bandwidth))
+
+        with QSignalBlocker(self.checkBoxLink):
+            self.checkBoxLink.setChecked(read('audio/link', bool, False))
 
     def _connect(self):
         serialPort = self.comboBoxSerialPort.currentText()
