@@ -90,6 +90,24 @@ def test_different_kinds_are_not_merged(driver):
     assert queued(driver) == [b'A\x00\x0a', b'V\x00\x14', b'M1', b'G3']
 
 
+def test_both_volume_supersedes_waiting_line_and_speaker(driver):
+    # 'C' sets both outputs, so it replaces any waiting A, V or C, taking the
+    # place of the first. Otherwise a waiting A could be sent after the newer
+    # C and leave the line output at the older level.
+    driver.set_attenuation(10, 'Both')
+    driver.set_attenuation(20, 'Line')
+    driver.set_mode('USB')
+    driver.set_attenuation(30, 'Speaker')
+    driver.set_attenuation(40, 'Both')
+    assert queued(driver) == [b'C\x00\x28', b'M1']
+
+
+def test_line_or_speaker_after_both_is_kept(driver):
+    driver.set_attenuation(40, 'Both')
+    driver.set_attenuation(20, 'Line')
+    assert queued(driver) == [b'C\x00\x28', b'A\x00\x14']
+
+
 def test_signal_polls_are_not_merged(driver):
     driver.get_signal_strength()
     driver.get_signal_strength()

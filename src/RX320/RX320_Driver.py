@@ -78,10 +78,16 @@ class RX320_Driver():
         # radio seconds behind. Overwriting in place keeps the queue order.
         with self.msg_queue.mutex:
             pending = self.msg_queue.queue
-            for i, (queued, mode) in enumerate(pending):
-                if mode == 'W' and queued[:1] == msg[:1]:
-                    pending[i] = (msg, 'W')
-                    return
+            # 'C' sets both volumes, so it also supersedes a waiting 'A' (line)
+            # or 'V' (speaker); every other command only replaces its own kind
+            kinds = b'ACV' if msg[:1] == b'C' else msg[:1]
+            matches = [i for i, (queued, mode) in enumerate(pending)
+                       if mode == 'W' and queued[:1] in kinds]
+            if matches:
+                pending[matches[0]] = (msg, 'W')
+                for i in reversed(matches[1:]):
+                    del pending[i]
+                return
         self.msg_queue.put((msg, 'W'))
 
     def set_attenuation(self, level=data.ATTENUATION_MAX, cmd='Both'):

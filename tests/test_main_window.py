@@ -251,28 +251,41 @@ def test_decimal_comma_locale(german_locale, make_window, radio):
 
 # --- Audio ---------------------------------------------------------------------
 
-def test_linked_volume_moves_both(connected, radio):
+def test_unlinked_sliders_are_independent(connected, radio):
+    connected.sliderVol.setValue(-20)
+    connected.sliderLine.setValue(-30)
+    assert radio.calls == [('set_attenuation', -20, 'Speaker'),
+                           ('set_attenuation', -30, 'Line')]
+
+
+@pytest.mark.parametrize('moved, follower', [('sliderVol', 'sliderLine'),
+                                             ('sliderLine', 'sliderVol')])
+def test_linked_volume_is_one_command(connected, radio, moved, follower):
     connected.checkBoxLink.setChecked(True)
     radio.calls.clear()
-    connected.sliderVol.setValue(-20)
-    assert connected.sliderLine.value() == -20
-    assert ('set_attenuation', -20, 'Line') in radio.calls
-    assert ('set_attenuation', -20, 'Speaker') in radio.calls
+    getattr(connected, moved).setValue(-20)
+    assert getattr(connected, follower).value() == -20
+    assert radio.calls == [('set_attenuation', -20, 'Both')]
 
 
-def test_linking_equalizes_to_the_quieter_level(connected):
+def test_linking_equalizes_to_the_quieter_level(connected, radio):
     connected.sliderLine.setValue(-40)
     connected.sliderVol.setValue(-20)
+    radio.calls.clear()
     connected.checkBoxLink.setChecked(True)
     assert connected.sliderLine.value() == connected.sliderVol.value() == -40
+    assert radio.calls == [('set_attenuation', -40, 'Both')]
 
 
-def test_mute(connected, radio):
+@pytest.mark.parametrize('linked', [False, True])
+def test_mute_is_one_command(connected, radio, linked):
     connected.sliderLine.setValue(-10)
-    connected.sliderVol.setValue(-10)
+    connected.sliderVol.setValue(-30)
+    connected.checkBoxLink.setChecked(linked)
     radio.calls.clear()
     button(connected, 'Mute').click()
-    assert radio.calls == [('set_attenuation', -96, 'Line'), ('set_attenuation', -96, 'Speaker')]
+    assert connected.sliderLine.value() == connected.sliderVol.value() == -96
+    assert radio.calls == [('set_attenuation', -96, 'Both')]
 
 
 # --- Closing -------------------------------------------------------------------

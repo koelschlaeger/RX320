@@ -291,8 +291,11 @@ class MainWindow(QMainWindow):
         self.radio.set_vfo_a(freq)
 
     def on_mute(self):
-        self.sliderLine.setValue(self.sdr.MIN_VOLUME)
-        self.sliderVol.setValue(self.sdr.MIN_VOLUME)
+        for slider in (self.sliderLine, self.sliderVol):
+            with QSignalBlocker(slider):
+                slider.setValue(self.sdr.MIN_VOLUME)
+
+        self.sdr.set_attenuation(self.sdr.MIN_VOLUME, 'Both')
 
     def on_dial_changed(self, value):
         span = self.dial.maximum() - self.dial.minimum()
@@ -308,14 +311,19 @@ class MainWindow(QMainWindow):
             self._show_vfo()
 
     def on_line_level_changed(self, value):
-        if self.checkBoxLink.isChecked():
-            self.sliderVol.setValue(value)
-        self.sdr.set_attenuation(value, 'Line')
+        self._on_level_changed(value, self.sliderVol, 'Line')
 
     def on_volume_changed(self, value):
+        self._on_level_changed(value, self.sliderLine, 'Speaker')
+
+    def _on_level_changed(self, value, other_slider, target):
+        # When linked, move the other slider silently (no second command)
+        # and set both outputs with one 'Both' command
         if self.checkBoxLink.isChecked():
-            self.sliderLine.setValue(value)
-        self.sdr.set_attenuation(value, 'Speaker')
+            with QSignalBlocker(other_slider):
+                other_slider.setValue(value)
+            target = 'Both'
+        self.sdr.set_attenuation(value, target)
 
     def on_bandwidth_changed(self, filter_id):
         self.sdr.set_filter(self.Filters[filter_id])
