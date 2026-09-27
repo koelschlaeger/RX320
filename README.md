@@ -8,6 +8,8 @@ The RX-320 has no front-panel controls and stores no settings of its own: it
 is programmed entirely over its serial port. This app provides the controls
 and keeps the radio in sync with them.
 
+![The RX320 control panel connected to the radio, tuned to 860 kHz in AM](doc/screenshot.png)
+
 ## Features
 
 - Tuning from 0.5 to 30 MHz with a dial, step buttons, or by typing a
@@ -62,7 +64,6 @@ uv run pytest
 The suite runs headless (no display needed) and never touches a real radio or
 your saved settings: it uses fake radios, including a pseudo-terminal that
 stands in for the serial device (those tests are skipped on Windows).
-
 
 ## Project layout
 
