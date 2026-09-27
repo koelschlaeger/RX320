@@ -33,10 +33,15 @@ def test_defaults_without_saved_settings(window):
 
 @pytest.fixture
 def saved_session(make_window):
-    """Run a session that changes everything, then close it."""
+    """Run a session that changes everything, then close it. Returns the
+    window size it saved, as (default size, saved size)."""
     radio = FakeRadio()
     window = make_window(radio)
-    window.resize(700, 400)
+    default_size = (window.width(), window.height())
+    # Change only the height: the minimum width depends on the platform's
+    # fonts and style (about 673 px on Linux, 808 px on Windows), so Qt
+    # may not allow a fixed width; the height has room everywhere.
+    window.resize(window.width(), window.height() + 60)
     window.comboBoxSerialPort.setCurrentText(FAKE_PORTS[1])
     window._connect()
     window.spinBoxVFOA.setValue(7.2)
@@ -48,10 +53,14 @@ def saved_session(make_window):
     window.sliderBW.setValue(22)               # 3000 Hz
     window.sliderVol.setValue(-20)
     window.checkBoxLink.setChecked(True)
+    saved_size = (window.width(), window.height())
     window.close()
+    return default_size, saved_size
 
 
 def test_settings_restored_next_session(saved_session, make_window):
+    default_size, saved_size = saved_session
+    assert saved_size != default_size  # the resize really changed something
     radio = FakeRadio()
     window = make_window(radio)
     assert window.comboBoxSerialPort.currentText() == FAKE_PORTS[1]
@@ -63,7 +72,7 @@ def test_settings_restored_next_session(saved_session, make_window):
     assert window.stepButtonGroup.checkedButton().text() == '100 Hz'
     assert window.spinBoxVFOA.singleStep() == pytest.approx(0.0001)
     assert window.checkBoxLink.isChecked()
-    assert (window.width(), window.height()) == (700, 400)
+    assert (window.width(), window.height()) == saved_size
 
 
 def test_volume_is_never_restored(saved_session, make_window):

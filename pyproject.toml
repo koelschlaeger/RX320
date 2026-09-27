@@ -24,3 +24,4 @@ pythonpath = ["src"]
 qt_api = "pyqt6"
 # A crash in a background thread (e.g. the serial worker) fails the test
 filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
+faulthandler_timeout = 60
