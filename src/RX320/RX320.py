@@ -80,6 +80,7 @@ class RX320():
         if Bandwidth in self.sdr.FILTERS:
             self.Filter = Bandwidth
             self.sdr.SetFilter(Bandwidth)
+            self._Retune()
         else:
             #Invalid filter selection
             raise IndexError()
@@ -88,7 +89,13 @@ class RX320():
         if Mode in self.sdr.MODES:
             self.Mode = Mode
             self.sdr.SetMode(Mode)
+            self._Retune()
         else:
             # Invalid Mode
             raise IndexError()
+
+    def _Retune(self):
+        # The tuning command encodes mode and filter offsets, so resend it
+        # whenever either changes.
+        self.sdr.SetVFO(self.Freq, self.Mode, self.Filter)
 

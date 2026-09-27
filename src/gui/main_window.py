@@ -233,7 +233,11 @@ class MainWindow(QDialog):
         self.sliderBW = QSlider(Qt.Orientation.Vertical, self.sliderGroupBox)
         self.sliderBW.setRange(0, 33)
         self.sliderBW.setValue(33)
+        # Only send the filter (and the retune it triggers) on release, so a
+        # fast drag doesn't queue up seconds of serial commands.
+        self.sliderBW.setTracking(False)
         self.sliderBW.valueChanged.connect(self.sliderBW_ValueChange)
+        self.sliderBW.sliderMoved.connect(self.sliderBW_Moved)
 
         self.sliderPBT = QSlider(Qt.Orientation.Vertical, self.sliderGroupBox)
         self.sliderPBT.setRange(0, 300)
@@ -329,6 +333,10 @@ class MainWindow(QDialog):
         filter_id = self.sliderBW.value()
         self.sdr.SetFilter(self.Filters[filter_id])
         self.labelBW_Act.setText(str(self.Filters[filter_id]))
+
+    def sliderBW_Moved(self, position):
+        # Keep the BW label live while dragging; the radio updates on release
+        self.labelBW_Act.setText(str(self.Filters[position]))
 
     def checkBoxLink_Toggled(self):
         if self.checkBoxLink.isChecked():
