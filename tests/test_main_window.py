@@ -4,7 +4,7 @@ from PyQt6.QtCore import QLocale, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QPushButton
 
-from conftest import FAKE_PORTS
+from conftest import FAKE_PORT_DESCRIPTIONS, FAKE_PORTS
 
 
 def button(window, text):
@@ -103,6 +103,33 @@ def test_lost_connection_is_detected(qtbot, connected, radio, dialogs):
     assert ('disconnect',) in radio.calls
     assert not connected.modeGroupBox.isEnabled()
     assert not connected.progressBarSignal.isVisible()
+
+
+# --- Serial port list ----------------------------------------------------------
+
+def test_port_list_items_have_description_tooltips(window):
+    ports = window.comboBoxSerialPort
+    tooltips = {ports.itemText(i): ports.itemData(i, Qt.ItemDataRole.ToolTipRole)
+                for i in range(ports.count())}
+    assert tooltips == FAKE_PORT_DESCRIPTIONS
+
+
+def test_closed_port_box_tooltip_follows_selection(window):
+    ports = window.comboBoxSerialPort
+    assert ports.toolTip() == FAKE_PORT_DESCRIPTIONS['/dev/fake0']
+    ports.setCurrentText('/dev/fake1')
+    assert ports.toolTip() == FAKE_PORT_DESCRIPTIONS['/dev/fake1']
+    ports.setCurrentText('/dev/fake2')  # no description: no tooltip
+    assert ports.toolTip() == ''
+
+
+def test_refresh_keeps_selection_and_tooltip(window, fake_ports):
+    ports = window.comboBoxSerialPort
+    ports.setCurrentText('/dev/fake1')
+    fake_ports.reverse()  # the OS lists them in a different order now
+    button(window, 'Refresh').click()
+    assert ports.currentText() == '/dev/fake1'
+    assert ports.toolTip() == FAKE_PORT_DESCRIPTIONS['/dev/fake1']
 
 
 # --- Signal meter ------------------------------------------------------------

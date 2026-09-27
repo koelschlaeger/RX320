@@ -19,7 +19,10 @@ from fakes import FakeRadio, PtyRadio
 from gui import main_window
 from gui.main_window import SETTINGS_SCOPE, MainWindow
 
-FAKE_PORTS = ['/dev/fake0', '/dev/fake1']
+FAKE_PORTS = ['/dev/fake0', '/dev/fake1', '/dev/fake2']
+FAKE_PORT_DESCRIPTIONS = {'/dev/fake0': 'FT232R USB UART (FTDI), serial AB0N3GLA',
+                          '/dev/fake1': 'Prolific USB-Serial',
+                          '/dev/fake2': None}  # e.g. a built-in port
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +48,8 @@ def dialogs(monkeypatch):
 def fake_ports(monkeypatch):
     """Port list that doesn't depend on what's plugged into this machine."""
     ports = list(FAKE_PORTS)
-    monkeypatch.setattr(main_window, 'get_serial_ports', lambda: list(ports))
+    monkeypatch.setattr(main_window, 'get_serial_ports',
+                        lambda: [(p, FAKE_PORT_DESCRIPTIONS.get(p)) for p in ports])
     return ports
 
 

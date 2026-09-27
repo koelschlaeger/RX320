@@ -126,12 +126,23 @@ class MainWindow(QMainWindow):
         return spinBox
 
     def _refresh_serial_ports(self):
-        current = self.comboBoxSerialPort.currentText()
-        ports = get_serial_ports()
-        self.comboBoxSerialPort.clear()
-        self.comboBoxSerialPort.addItems(ports)
-        if current in ports:
-            self.comboBoxSerialPort.setCurrentText(current)
+        ports = self.comboBoxSerialPort
+        current = ports.currentText()
+        ports.clear()
+        for device, description in get_serial_ports():
+            ports.addItem(device)
+            if description:
+                ports.setItemData(ports.count() - 1, description,
+                                  Qt.ItemDataRole.ToolTipRole)
+        index = ports.findText(current)
+        if index >= 0:
+            ports.setCurrentIndex(index)
+        self._show_port_description(ports.currentIndex())  # list is complete now
+
+    def _show_port_description(self, index):
+        # Hovering the closed box shows the selected port's description
+        description = self.comboBoxSerialPort.itemData(index, Qt.ItemDataRole.ToolTipRole)
+        self.comboBoxSerialPort.setToolTip(description or '')
 
     def _create_top_layout(self):
         labelLogo = QLabel()
@@ -146,6 +157,7 @@ class MainWindow(QMainWindow):
         self.bottomLayout = QHBoxLayout()
         self.comboBoxSerialPort = QComboBox()
         self.comboBoxSerialPort.setMinimumWidth(120)
+        self.comboBoxSerialPort.currentIndexChanged.connect(self._show_port_description)
         self._refresh_serial_ports()
 
         pushButtonQuit = self._make_button('Quit', slot=self._quit)
