@@ -8,8 +8,6 @@ from PyQt6.QtWidgets import (QAbstractSpinBox, QCheckBox, QComboBox, QDial,
         QMessageBox, QPushButton, QRadioButton, QButtonGroup, QSlider,
         QVBoxLayout)
 
-from RX320.RX320 import RX320
-
 from .constants import IMG_DIR, TuningSteps
 from .radio_controller import RadioController
 from .serial_utils import get_serial_ports
@@ -23,10 +21,11 @@ def _format_hz(hz):
 
 
 class MainWindow(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, sdr, parent=None):
         super().__init__(parent)
-        # Create SDR instance
-        self.sdr = RX320()
+        # sdr: an RX320, or any object with the same interface (e.g. a fake
+        # radio for tests)
+        self.sdr = sdr
         self.radio = RadioController(self.sdr)
 
         self.Modes = self.sdr.Modes
