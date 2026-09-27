@@ -4,9 +4,7 @@ Created on Sun May  1 14:58:07 2022
 
 @author: KOelschlaeger
 """
-# from RX320_Data import *
-from RX320.RX320_Driver import *
-from RX320.RX320_Data import AGC
+from RX320.RX320_Driver import RX320_Driver
 
 
 class RX320():
@@ -25,18 +23,23 @@ class RX320():
     LineAttenuation = 63       # Mute
     SpeakerAttenuation = 63    # Mute
     AGC = 'Medium'             # 'Medium'
-    Connected = False
 
     def __init__(self):
-        self.Connected = False
+        self.sdr = None
+
+    @property
+    def Connected(self):
+        # Live status: goes False on its own if the port is lost
+        return self.sdr is not None and self.sdr.IsOpen()
 
     def Connect(self, comPort):
         self.sdr = RX320_Driver(comPort)
-        self.Connected = self.sdr.OpenSerial()
+        self.sdr.OpenSerial()
 
     def Disconnect(self):
-        self.sdr.CloseSerial()
-        self.Connected = False
+        # Safe to call at any time, including after the connection was lost
+        if self.sdr is not None:
+            self.sdr.CloseSerial()
 
     def SetAttenuation(self, Value, Target):
         # Remap [0, -96] to [0, 63]

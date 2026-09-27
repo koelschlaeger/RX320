@@ -2,7 +2,7 @@
 
 import serial
 from PyQt6.QtGui import QIcon, QPixmap, QDoubleValidator
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDial, QDialog, QGridLayout,
         QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
         QRadioButton, QButtonGroup, QSlider, QVBoxLayout)
@@ -27,6 +27,11 @@ class MainWindow(QDialog):
         self.Filters = self.sdr.Filters
 
         self.dialStart = 0
+
+        # Watches for the radio connection dropping (e.g. USB unplugged)
+        self.connectionTimer = QTimer(self)
+        self.connectionTimer.setInterval(500)
+        self.connectionTimer.timeout.connect(self._check_connection)
 
         self.createModeGroupBox()
         self.createAGCGroupBox()
@@ -393,6 +398,7 @@ class MainWindow(QDialog):
 
         # Enable control surfaces
         self.set_controls_enabled(True)
+        self.connectionTimer.start()
 
     def _sync_radio_to_gui(self):
         # Push every GUI setting to the radio, which the driver has just reset
@@ -407,9 +413,16 @@ class MainWindow(QDialog):
         self.sdr.SetAttenuation(self.sliderVol.value(), 'Speaker')
 
     def _disconnect(self):
+        self.connectionTimer.stop()
+
         # Disable control surfaces
         self.set_controls_enabled(False)
 
-        # Check if serial port still in use
-        if self.sdr.Connected:
-            self.sdr.Disconnect()
+        # Always close the port, even if the connection was already lost
+        self.sdr.Disconnect()
+
+    def _check_connection(self):
+        if not self.sdr.Connected:
+            self._disconnect()
+            QMessageBox.warning(self, 'Connection lost',
+                                'Lost connection to the radio. Check the cable and reconnect.')

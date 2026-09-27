@@ -4,20 +4,21 @@ Created on Sun May  1 14:58:07 2022
 
 @author: KOelschlaeger
 """
-from ntpath import join
-import serial
 import struct
-from queue import Queue
-from time import sleep
-from threading import Thread
+from queue import Empty, Queue
+from threading import Event, Thread
 
-# Get/Set functions should be thread-safe as they only append to the queue.
-# Still need to implement the way to call the _ServiceQueue() method either
-# on a timer or as a 'continuous' task thread
+import serial
+
+# Get/Set functions are thread-safe as they only append to the queue, which
+# a worker thread (_ServiceQueue) drains to the serial port.
 
 BAUDRATE = 1200
 BYTESIZE = 8
 PARITY = 'N'
+
+POLL_INTERVAL = 0.2  # Seconds of idle time before polling signal strength
+REPLY_LEN = 4        # Reply to 'X': b'X' + 16-bit value + b'\r'
 
 class RX320_Driver():
     MinFreq = 0.5
@@ -78,6 +79,14 @@ class RX320_Driver():
         'Both'    : b'C'     #C <00> <volume 0-63>
         })
 
+    # Offset direction applied to the tuning frequency for each mode
+    MODE_CORRECTION = dict({
+        'AM'  :  0,
+        'USB' :  1,
+        'LSB' : -1,
+        'CW'  : -1
+        })
+
     def __init__(self, ComPort):
         # Setup serial interface
         self.com = serial.Serial()
@@ -86,36 +95,38 @@ class RX320_Driver():
         self.com.bytesize = BYTESIZE
         self.com.parity = PARITY
         self.com.timeout = 0.75
-        # Setup message queue
+        # Setup message queue and worker thread state
         self.msgQueue = Queue()
+        self.queueThread = None
+        self._stop = Event()
+        self.RSI = 0
 
     def OpenSerial(self):
-        if self.com.is_open:
-            self._PowerUp()
-        else:
+        if not self.com.is_open:
             try:
                 self.com.open()
-            except serial.serialutil.SerialException:
-                self.com.close()
+            except serial.SerialException:
                 return False
-            self._PowerUp()
+        self._PowerUp()
 
-        self.queueThread = Thread(target=self._ServiceQueue)
+        self._stop.clear()
+        # Daemon so a missed CloseSerial() can't keep the process alive
+        self.queueThread = Thread(target=self._ServiceQueue, daemon=True)
         self.queueThread.start()
         return True
 
+    def IsOpen(self):
+        # True while the port is open and the worker is still servicing it
+        return self.com.is_open and not self._stop.is_set()
 
     def CloseSerial(self):
-        self.QueueEnable = False
+        # Drop pending commands, let the worker finish, then close the port
+        self._stop.set()
         with self.msgQueue.mutex:
             self.msgQueue.queue.clear()
-
-        sleep(0.5)
-        if self.com.is_open:
-            self.com.close()
-
-        self.queueThread.join()
-
+        if self.queueThread:
+            self.queueThread.join()
+        self.com.close()
 
     def SetAttenuation(self, level=63, cmd='Both'):
         if ((level >= 0) and (level <= 63)):
@@ -151,17 +162,7 @@ class RX320_Driver():
     # cwbfo: CW Beat Freq Offset
     def SetVFO(self, freq, mode, bw, cwbfo=0):
         # Mode Correction
-        ModeCorr = dict({
-            'AM'  :  0,
-            'USB' :  1,
-            'LSB' : -1,
-            'CW'  : -1
-            })
-
-        if mode in ModeCorr:
-            mCorr = ModeCorr[mode]
-        else:
-            mCorr = 0
+        mCorr = self.MODE_CORRECTION.get(mode, 0)
 
         # Filter Correction
         fCorr = (bw / 2) + 200
@@ -172,19 +173,9 @@ class RX320_Driver():
         FineTuningFactor = int((AdjustedTuningFreq % 0.0025) * 2500 * 5.46)
         BFOTuningFactor = int((fCorr + cwbfo + 8000) * 2.73)
 
-        # Byte Packing
-        baCTF = struct.pack('H', CoarseTuningFactor)
-        baFTF = struct.pack('H', FineTuningFactor)
-        baBFOTF = struct.pack('H', BFOTuningFactor)
-
-        Ch = baCTF[1]
-        Cl = baCTF[0]
-        Fh = baFTF[1]
-        Fl = baFTF[0]
-        Bh = baBFOTF[1]
-        Bl = baBFOTF[0]
-
-        self.msgQueue.put((struct.pack('cBBBBBB', b'N', Ch, Cl, Fh, Fl, Bh, Bl),'W'))
+        # 'N' followed by each factor as a big-endian 16-bit value
+        self.msgQueue.put((struct.pack('>cHHH', b'N', CoarseTuningFactor,
+                                       FineTuningFactor, BFOTuningFactor), 'W'))
 
     def GetSignalStrength(self):
         # Send X to request signal strength
@@ -192,42 +183,44 @@ class RX320_Driver():
 
     def _PowerUp(self):
         # Reprogramming the radio at power-up requires setting the MODE,
-        # FERQUENCY, FILTER and VOLUME level. To prevent unwanted audio output the VOLUME setting should be done last.
+        # FREQUENCY, FILTER and VOLUME level. To prevent unwanted audio
+        # output the VOLUME setting should be done last.
         self.SetVFO(0.500, 'AM', 8000)
-        # 6kHz filter
+        # 8kHz filter
         self.SetFilter(8000)
         # Mute
         self.SetAttenuation(63, 'Both')
-        # Enable Message Queue
-        self.QueueEnable = True
 
     def _CommandWrite(self, cmd):
-        if self.com.is_open:
-            FS = str(len(cmd)) + 'sc'
-            ba = struct.pack(FS, cmd, b'\r')
-            self.com.write(ba)
-            # print(com.readline())
+        self.com.write(cmd + b'\r')
 
     def _CommandReadWrite(self, cmd):
-        if self.com.is_open:
-            FS = str(len(cmd)) + 'sc'
-            self.com.write(struct.pack(FS, cmd, b'\r'))
-            try:
-                ret = self.com.readline()
-                value = struct.unpack('>cHc', ret)
-            except:
-                value = ([0, 0, 0])
-        return value[1]
+        # Returns the reply's 16-bit value, or None if no valid reply arrived.
+        # Replies end in '\r', not '\n', so read a fixed length rather than
+        # readline(), which would always wait out the full timeout.
+        self.com.read(self.com.in_waiting)  # Discard any stale reply bytes
+        self.com.write(cmd + b'\r')
+        reply = self.com.read(REPLY_LEN)
+        if len(reply) != REPLY_LEN or reply[:1] != cmd[:1] or reply[-1:] != b'\r':
+            return None
+        return struct.unpack('>cHc', reply)[1]
 
     def _ServiceQueue(self):
-        while self.QueueEnable:
-            if self.msgQueue.empty():
-                # If the queue is empty, add RSI request to queue
-                self.GetSignalStrength()
-            else:
-                (msg, mode) = self.msgQueue.get()
+        while not self._stop.is_set():
+            try:
+                (msg, mode) = self.msgQueue.get(timeout=POLL_INTERVAL)
+            except Empty:
+                # Nothing to send, so poll signal strength
+                (msg, mode) = (b'X', 'RW')
+
+            try:
                 if mode == 'RW':
-                    self.RSI = self._CommandReadWrite(msg)
+                    value = self._CommandReadWrite(msg)
+                    if value is not None:
+                        self.RSI = value
                 elif mode == 'W':
                     self._CommandWrite(msg)
+            except (OSError, serial.SerialException):
+                # Port went away (e.g. USB unplugged); stop the worker
+                self._stop.set()
 
