@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (QCheckBox, QComboBox, QDial, QDialog, QGridLayout,
 
 from RX320.RX320 import RX320
 
-from .constants import TuningSteps
+from .constants import IMG_DIR, TuningSteps
 from .radio_controller import RadioController
 from .serial_utils import getSerialPorts
 
@@ -77,7 +77,7 @@ class MainWindow(QDialog):
 
     def createTopLayout(self):
         labelLogo = QLabel()
-        labelLogo.setPixmap(QPixmap('img/ttrx320.xpm'))
+        labelLogo.setPixmap(QPixmap(str(IMG_DIR / 'ttrx320.xpm')))
 
         self.topLayout = QHBoxLayout()
         self.topLayout.addWidget(labelLogo)
@@ -144,16 +144,16 @@ class MainWindow(QDialog):
     def createVFOGroupBox(self):
         self.vfoGroupBox = QGroupBox()
 
-        pushButtonStepUpUp = self._make_button(icon='img/up2.xpm',
+        pushButtonStepUpUp = self._make_button(icon=str(IMG_DIR / 'up2.xpm'),
                                                slot=lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * 10.0))
 
-        pushButtonStepUp = self._make_button(icon='img/up.xpm',
+        pushButtonStepUp = self._make_button(icon=str(IMG_DIR / 'up.xpm'),
                                              slot=lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * 1.0))
 
-        pushButtonStepDownDown = self._make_button(icon='img/down2.xpm',
+        pushButtonStepDownDown = self._make_button(icon=str(IMG_DIR / 'down2.xpm'),
                                                    slot=lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * -10.0))
 
-        pushButtonStepDown = self._make_button(icon='img/down.xpm',
+        pushButtonStepDown = self._make_button(icon=str(IMG_DIR / 'down.xpm'),
                                                slot=lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * -1.0))
 
         pushButtonVFOSwap = self._make_button('A / B', slot=self.pushButtonVFOSwap_ButtonClicked)
@@ -363,11 +363,14 @@ class MainWindow(QDialog):
             widget.setDisabled(not enabled)
 
     def _quit(self):
-        # Check if serial port still in use
-        if self.sdr.Connected:
-            self._disconnect()
-
         self.close()
+
+    def done(self, result):
+        # Every way a QDialog closes (Quit, window X, Esc) ends up here.
+        # Stop the serial worker thread, otherwise the non-daemon thread
+        # keeps the process alive after the window is gone.
+        self._disconnect()
+        super().done(result)
 
     def _connect(self):
         serialPort = self.comboBoxSerialPort.currentText()
@@ -380,6 +383,10 @@ class MainWindow(QDialog):
         except (OSError, serial.SerialException) as e:
             QMessageBox.critical(self, 'Connection failed',
                                  f'Could not connect to {serialPort}:\n{e}')
+            return
+        if not self.sdr.Connected:
+            QMessageBox.critical(self, 'Connection failed',
+                                 f'Could not open {serialPort}.')
             return
 
         # Enable control surfaces

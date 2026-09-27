@@ -31,12 +31,12 @@ class RX320():
         self.Connected = False
 
     def Connect(self, comPort):
-        print(comPort)
         self.sdr = RX320_Driver(comPort)
         self.Connected = self.sdr.OpenSerial()
 
     def Disconnect(self):
         self.sdr.CloseSerial()
+        self.Connected = False
 
     def SetAttenuation(self, Value, Target):
         # Remap [0, -96] to [0, 63]
