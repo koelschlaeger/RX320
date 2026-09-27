@@ -204,7 +204,6 @@ class MainWindow(QMainWindow):
         labelLine = QLabel('Line')
         labelVol = QLabel('Vol')
         labelBW = QLabel('BW')
-        labelPBT = QLabel('PBT')
 
         self.sliderLine = QSlider(Qt.Orientation.Vertical)
         self.sliderLine.setRange(-96, 0)
@@ -227,10 +226,6 @@ class MainWindow(QMainWindow):
         self.sliderBW.valueChanged.connect(self.on_bandwidth_changed)
         self.sliderBW.sliderMoved.connect(self.on_bandwidth_moved)
 
-        self.sliderPBT = QSlider(Qt.Orientation.Vertical)
-        self.sliderPBT.setRange(0, 300)
-        self.sliderPBT.setValue(0)
-
         self.checkBoxLink = QCheckBox("&Link")
         self.checkBoxLink.toggled.connect(self.on_link_toggled)
 
@@ -238,12 +233,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(labelLine, 0, 0)
         layout.addWidget(labelVol, 0, 1)
         layout.addWidget(labelBW, 0, 2)
-        layout.addWidget(labelPBT, 0, 3)
         layout.addWidget(self.sliderLine, 1, 0)
         layout.addWidget(self.sliderVol, 1, 1)
         layout.addWidget(self.checkBoxLink, 2, 0, 1, 2)
         layout.addWidget(self.sliderBW, 1, 2, 2, 1)
-        layout.addWidget(self.sliderPBT, 1, 3, 2, 1)
 
         self.sliderGroupBox.setLayout(layout)
 
