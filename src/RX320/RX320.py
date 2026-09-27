@@ -4,12 +4,21 @@ Created on Sun May  1 14:58:07 2022
 
 @author: KOelschlaeger
 """
-from RX320.RX320 import *
-# import RX320.MODES as MODES
-# import RX320.AGC as AGC
-# import RX320.FILTERS as FILTERS
+# from RX320_Data import *
+from RX320.RX320_Driver import *
+from RX320.RX320_Data import AGC
 
-class MySDR(): # was SDR but apparently that is a namespace collision!?!
+
+class RX320():
+    Modes = ('AM', 'LSB', 'USB', 'CW')
+    Target = ('Line', 'Speaker', 'Both')
+    AGCModes = ('Slow', 'Medium', 'Fast')
+
+    Filters = (300, 330, 375, 450, 525, 600, 675, 750, 900, 1050, 1200,
+               1350, 1500, 1650, 1800, 1950, 2100, 2250, 2400, 2550, 2700, 2850,
+               3000, 3300, 3600, 3900, 4200, 4500, 4800, 5100, 5400, 5700, 6000, 8000)
+
+
     Mode = 'AM'                # AM
     Filter = 8000              # 8kHz
     Freq = 0.5                 # 500kHz
@@ -17,17 +26,18 @@ class MySDR(): # was SDR but apparently that is a namespace collision!?!
     SpeakerAttenuation = 63    # Mute
     AGC = 'Medium'             # 'Medium'
     Connected = False
-    
+
     def __init__(self):
         self.Connected = False
-        
-    def Connect(self, comPort='/dev/cu.usbserial-AB0N3GLA'):
-        self.sdr = RX320(comPort)
+
+    def Connect(self, comPort):
+        print(comPort)
+        self.sdr = RX320_Driver(comPort)
         self.Connected = self.sdr.OpenSerial()
-        
+
     def Disconnect(self):
         self.sdr.CloseSerial()
-        
+
     def SetAttenuation(self, Value, Target):
         # Remap [0, -96] to [0, 63]
         # Attenuation is from 0 to 63 -> 0 to 96dB (1.5dB/step)
@@ -46,7 +56,7 @@ class MySDR(): # was SDR but apparently that is a namespace collision!?!
         else:
             # Invalid command
             raise IndexError()
-            
+
     def SetVFO(self, frequency):
         if frequency >= self.sdr.MinFreq and frequency <= self.sdr.MaxFreq:
             self.Freq = frequency
@@ -54,7 +64,7 @@ class MySDR(): # was SDR but apparently that is a namespace collision!?!
         else:
             # VFO frequency out of range
             raise ValueError()
-        
+
     def SetAGC(self, Mode):
         if Mode in self.sdr.AGC:
             self.AGC = Mode
@@ -62,7 +72,7 @@ class MySDR(): # was SDR but apparently that is a namespace collision!?!
         else:
             # Invalid command
             raise IndexError()
-            
+
     def SetFilter(self, Bandwidth):
         if Bandwidth in self.sdr.FILTERS:
             self.Filter = Bandwidth
@@ -70,7 +80,7 @@ class MySDR(): # was SDR but apparently that is a namespace collision!?!
         else:
             #Invalid filter selection
             raise IndexError()
-    
+
     def SetMode(self, Mode):
         if Mode in self.sdr.MODES:
             self.Mode = Mode
@@ -78,4 +88,4 @@ class MySDR(): # was SDR but apparently that is a namespace collision!?!
         else:
             # Invalid Mode
             raise IndexError()
-            
+

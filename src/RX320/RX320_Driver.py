@@ -15,15 +15,14 @@ from threading import Thread
 # Still need to implement the way to call the _ServiceQueue() method either
 # on a timer or as a 'continuous' task thread
 
-SERIALPORT = '/dev/cu.usbserial-AB0N3GLA' #'/dev/cu.usbserial-2110'
 BAUDRATE = 1200
 BYTESIZE = 8
 PARITY = 'N'
 
-class RX320():
+class RX320_Driver():
     MinFreq = 0.5
     MaxFreq = 30
-    
+
     MODES = dict({
         'AM':  b'M0',     #M0
         'USB': b'M1',     #M1
@@ -78,7 +77,7 @@ class RX320():
         'Speaker' : b'V',    #V <00> <volume 0-63>
         'Both'    : b'C'     #C <00> <volume 0-63>
         })
-    
+
     def __init__(self, ComPort):
         # Setup serial interface
         self.com = serial.Serial()
@@ -89,7 +88,7 @@ class RX320():
         self.com.timeout = 0.75
         # Setup message queue
         self.msgQueue = Queue()
-        
+
     def OpenSerial(self):
         if self.com.is_open:
             self._PowerUp()
@@ -102,52 +101,52 @@ class RX320():
                 self.com.close()
                 return False
             self._PowerUp()
-        
+
         self.queueThread = Thread(target=self._ServiceQueue)
         self.queueThread.start()
         return True
-        
-        
+
+
     def CloseSerial(self):
         self.QueueEnable = False
         with self.msgQueue.mutex:
             self.msgQueue.queue.clear()
-        
+
         sleep(0.5)
         if self.com.is_open:
             self.com.close()
 
         self.queueThread.join()
-        
-    
+
+
     def SetAttenuation(self, level=63, cmd='Both'):
         if ((level >= 0) and (level <= 63)):
             self.msgQueue.put((struct.pack('cBB', self.VOL[cmd], 0, level), 'W'))
             return True
         else:
             return False
-                
+
     def SetFilter(self, BandWidth):
         if BandWidth in self.FILTERS:
             self.msgQueue.put((struct.pack('2s',self.FILTERS[BandWidth]), 'W'))
             return True
         else:
             return False
-                
+
     def SetAGC(self, mode):
         if mode in self.AGC:
             self.msgQueue.put((struct.pack('2s', self.AGC[mode]), 'W'))
             return True
         else:
             return False
-    
+
     def SetMode(self, mode):
         if mode in self.MODES:
             self.msgQueue.put((struct.pack('2s', self.MODES[mode]), 'W'))
             return True
         else:
             return False
-    
+
     # freq: VFO tuning frequency (MHz)
     # mode: AM/USB/LSB/CW
     # bw: filter bandwidth
@@ -160,39 +159,39 @@ class RX320():
             'LSB' : -1,
             'CW'  : -1
             })
-        
+
         if mode in ModeCorr:
             mCorr = ModeCorr[mode]
         else:
             mCorr = 0
-        
+
         # Filter Correction
         fCorr = (bw / 2) + 200
-        
+
         # Tuning factors
         AdjustedTuningFreq = freq - 0.00125 + (mCorr * (fCorr + cwbfo)) / 1000000
         CoarseTuningFactor = int(AdjustedTuningFreq / 0.0025) + 18000
         FineTuningFactor = int((AdjustedTuningFreq % 0.0025) * 2500 * 5.46)
         BFOTuningFactor = int((fCorr + cwbfo + 8000) * 2.73)
-        
+
         # Byte Packing
         baCTF = struct.pack('H', CoarseTuningFactor)
         baFTF = struct.pack('H', FineTuningFactor)
         baBFOTF = struct.pack('H', BFOTuningFactor)
-        
+
         Ch = baCTF[1]
         Cl = baCTF[0]
         Fh = baFTF[1]
         Fl = baFTF[0]
         Bh = baBFOTF[1]
         Bl = baBFOTF[0]
-        
+
         self.msgQueue.put((struct.pack('cBBBBBB', b'N', Ch, Cl, Fh, Fl, Bh, Bl),'W'))
-                
+
     def GetSignalStrength(self):
         # Send X to request signal strength
         self.msgQueue.put((struct.pack('c', b'X'), 'RW'))
-    
+
     def _PowerUp(self):
         # Reprogramming the radio at power-up requires setting the MODE,
         # FERQUENCY, FILTER and VOLUME level. To prevent unwanted audio output the VOLUME setting should be done last.
@@ -203,14 +202,14 @@ class RX320():
         self.SetAttenuation(63, 'Both')
         # Enable Message Queue
         self.QueueEnable = True
-    
+
     def _CommandWrite(self, cmd):
         if self.com.is_open:
             FS = str(len(cmd)) + 'sc'
             ba = struct.pack(FS, cmd, b'\r')
             self.com.write(ba)
             # print(com.readline())
-        
+
     def _CommandReadWrite(self, cmd):
         if self.com.is_open:
             FS = str(len(cmd)) + 'sc'
@@ -221,7 +220,7 @@ class RX320():
             except:
                 value = ([0, 0, 0])
         return value[1]
-    
+
     def _ServiceQueue(self):
         while self.QueueEnable:
             if self.msgQueue.empty():
@@ -233,4 +232,4 @@ class RX320():
                     self.RSI = self._CommandReadWrite(msg)
                 elif mode == 'W':
                     self._CommandWrite(msg)
-                    
+
