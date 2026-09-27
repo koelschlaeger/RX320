@@ -92,8 +92,6 @@ class RX320_Driver():
     def OpenSerial(self):
         if self.com.is_open:
             self._PowerUp()
-            #self.SetVFO(7.3, 'AM', 8000)
-            #self.SetVolume('Both', 16)
         else:
             try:
                 self.com.open()
@@ -195,7 +193,7 @@ class RX320_Driver():
     def _PowerUp(self):
         # Reprogramming the radio at power-up requires setting the MODE,
         # FERQUENCY, FILTER and VOLUME level. To prevent unwanted audio output the VOLUME setting should be done last.
-        self.SetVFO(0.550, 'AM', 8000)
+        self.SetVFO(0.500, 'AM', 8000)
         # 6kHz filter
         self.SetFilter(8000)
         # Mute

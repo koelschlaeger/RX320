@@ -389,8 +389,22 @@ class MainWindow(QDialog):
                                  f'Could not open {serialPort}.')
             return
 
+        self._sync_radio_to_gui()
+
         # Enable control surfaces
         self.set_controls_enabled(True)
+
+    def _sync_radio_to_gui(self):
+        # Push every GUI setting to the radio, which the driver has just reset
+        # to its power-up defaults. Mode and filter go before the VFO because
+        # the tuning command depends on them; volume goes last so the radio
+        # doesn't briefly play audio at the wrong frequency.
+        self.sdr.SetMode(self.Modes[self.modeButtonGroup.checkedId()])
+        self.sdr.SetFilter(self.Filters[self.sliderBW.value()])
+        self.sdr.SetAGC(self.AGCModes[self.agcButtonGroup.checkedId()])
+        self.radio.set_vfo_a(self.radio.vfo_a)
+        self.sdr.SetAttenuation(self.sliderLine.value(), 'Line')
+        self.sdr.SetAttenuation(self.sliderVol.value(), 'Speaker')
 
     def _disconnect(self):
         # Disable control surfaces
