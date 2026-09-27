@@ -16,6 +16,9 @@ class RX320():
                1350, 1500, 1650, 1800, 1950, 2100, 2250, 2400, 2550, 2700, 2850,
                3000, 3300, 3600, 3900, 4200, 4500, 4800, 5100, 5400, 5700, 6000, 8000)
 
+    # Tuning range (MHz), available before a driver is connected
+    MinFreq = RX320_Driver.MinFreq
+    MaxFreq = RX320_Driver.MaxFreq
 
     Mode = 'AM'                # AM
     Filter = 8000              # 8kHz
@@ -61,7 +64,7 @@ class RX320():
             raise IndexError()
 
     def SetVFO(self, frequency):
-        if frequency >= self.sdr.MinFreq and frequency <= self.sdr.MaxFreq:
+        if self.MinFreq <= frequency <= self.MaxFreq:
             self.Freq = frequency
             self.sdr.SetVFO(self.Freq, self.Mode, self.Filter)
         else:

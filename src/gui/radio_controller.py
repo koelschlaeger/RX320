@@ -10,7 +10,7 @@ class RadioController:
         self.vfo_b = 0.500  # MHz
 
     def _clamp(self, freq_mhz: float) -> float:
-        return max(self.sdr.sdr.MinFreq, min(self.sdr.sdr.MaxFreq, freq_mhz))
+        return max(self.sdr.MinFreq, min(self.sdr.MaxFreq, freq_mhz))
 
     def set_vfo_a(self, freq_mhz: float) -> float:
         """Set VFO A to an absolute frequency (clamped). Returns the applied value."""
