@@ -27,13 +27,10 @@ class RX320():
     DefaultAGC = data.DEFAULT_AGC
     DefaultFreq = data.DEFAULT_FREQ
 
-    # Internal state of the radio
+    # Current tuning, kept so mode and filter changes can retune
     _Mode = DefaultMode
     _Filter = DefaultFilter
     _Freq = DefaultFreq
-    _LineAttenuation = data.ATTENUATION_MAX
-    _SpeakerAttenuation = data.ATTENUATION_MAX
-    _AGC = DefaultAGC
 
     def __init__(self):
         self.sdr = None
@@ -62,10 +59,6 @@ class RX320():
         if Target not in self._Target:
             raise IndexError()  # Invalid command
         attenuation = int(-Value * data.ATTENUATION_MAX / data.ATTENUATION_RANGE_DB)
-        if Target in ('Line', 'Both'):
-            self._LineAttenuation = attenuation
-        if Target in ('Speaker', 'Both'):
-            self._SpeakerAttenuation = attenuation
         self.sdr.SetAttenuation(attenuation, Target)
 
     def SetVFO(self, frequency):
@@ -78,7 +71,6 @@ class RX320():
 
     def SetAGC(self, Mode):
         if Mode in self.AGCModes:
-            self._AGC = Mode
             self.sdr.SetAGC(Mode)
         else:
             # Invalid command
