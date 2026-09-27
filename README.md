@@ -23,23 +23,25 @@ and keeps the radio in sync with them.
 
 - An RX-320 connected to a serial port, typically through a USB serial adapter
 - Python 3 (developed with Python 3.13)
-- PyQt6 and pyserial (see `requirements.txt`)
+- PyQt6 and pyserial (see `pyproject.toml`)
 
 Developed and tested on a Raspberry Pi running Raspberry Pi OS; it should also
 run on other Linux systems, Windows and macOS.
 
 ## Setup
 
+This project uses [uv](https://docs.astral.sh/uv/). With uv installed:
+
 ```sh
-python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+uv sync
 ```
+
+This creates `.venv` with the exact dependency versions from `uv.lock`.
 
 ## Running
 
 ```sh
-python src/main.py
+uv run src/main.py
 ```
 
 Pick the radio's serial port from the list at the bottom (USB adapters are
@@ -53,13 +55,13 @@ Settings are saved when you close the window, in
 ## Tests
 
 ```sh
-pip install -r requirements-dev.txt
-pytest
+uv run pytest
 ```
 
 The suite runs headless (no display needed) and never touches a real radio or
 your saved settings: it uses fake radios, including a pseudo-terminal that
 stands in for the serial device (those tests are skipped on Windows).
+
 
 ## Project layout
 

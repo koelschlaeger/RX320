@@ -1,0 +1,26 @@
+[project]
+name = "rx320"
+version = "0.1.0"
+description = "Control panel for the Ten-Tec RX-320 receiver"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pyqt6>=6.11",
+    "pyserial>=3.5",
+]
+
+[tool.uv]
+package = false   # an application run from src/, not an installable package
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-qt>=4.4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+qt_api = "pyqt6"
+# A crash in a background thread (e.g. the serial worker) fails the test
+filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
