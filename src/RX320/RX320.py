@@ -20,6 +20,9 @@ class RX320():
     MinFreq = RX320_Driver.MinFreq
     MaxFreq = RX320_Driver.MaxFreq
 
+    # Full-scale signal strength reading (measured on the radio)
+    SignalMax = 10000
+
     Mode = 'AM'                # AM
     Filter = 8000              # 8kHz
     Freq = 0.5                 # 500kHz

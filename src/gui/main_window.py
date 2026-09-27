@@ -5,8 +5,8 @@ from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtCore import Qt, QByteArray, QSettings, QSignalBlocker, QTimer
 from PyQt6.QtWidgets import (QAbstractSpinBox, QCheckBox, QComboBox, QDial,
         QDoubleSpinBox, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-        QMainWindow, QMessageBox, QPushButton, QRadioButton, QButtonGroup,
-        QSlider, QVBoxLayout, QWidget)
+        QMainWindow, QMessageBox, QProgressBar, QPushButton, QRadioButton,
+        QButtonGroup, QSlider, QVBoxLayout, QWidget)
 
 from .constants import IMG_DIR, TuningSteps
 from .radio_controller import RadioController
@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
         # While connected: refreshes the status bar and watches for the
         # connection dropping (e.g. USB unplugged)
         self.statusTimer = QTimer(self)
-        self.statusTimer.setInterval(500)
+        self.statusTimer.setInterval(250)
         self.statusTimer.timeout.connect(self._update_status)
 
         self.modeGroupBox, self.modeButtonGroup = self._make_radio_group(
@@ -78,10 +78,16 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("RX320")
 
         self.labelConnection = QLabel()
-        self.labelSignal = QLabel()
         self.statusBar().addWidget(self.labelConnection)
-        self.statusBar().addPermanentWidget(self.labelSignal)
         self.labelConnection.setText('Disconnected')
+
+        # Signal meter, shown only while connected
+        self.progressBarSignal = QProgressBar()
+        self.progressBarSignal.setRange(0, self.sdr.SignalMax)
+        self.progressBarSignal.setFormat('Signal %v')
+        self.progressBarSignal.setFixedWidth(160)
+        self.progressBarSignal.hide()
+        self.statusBar().addPermanentWidget(self.progressBarSignal)
 
         self.set_controls_enabled(False)
 
@@ -457,6 +463,7 @@ class MainWindow(QMainWindow):
         # Enable control surfaces
         self.set_controls_enabled(True)
         self.labelConnection.setText(f'Connected: {serialPort}')
+        self.progressBarSignal.show()
         self.statusTimer.start()
 
     def _sync_radio_to_gui(self):
@@ -477,7 +484,8 @@ class MainWindow(QMainWindow):
         # Disable control surfaces
         self.set_controls_enabled(False)
         self.labelConnection.setText('Disconnected')
-        self.labelSignal.clear()
+        self.progressBarSignal.hide()
+        self.progressBarSignal.reset()
 
         # Always close the port, even if the connection was already lost
         self.sdr.Disconnect()
@@ -489,4 +497,5 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, 'Connection lost',
                                 'Lost connection to the radio. Check the cable and reconnect.')
             return
-        self.labelSignal.setText(f'Signal: {self.sdr.SignalStrength}')
+        # Clamp in case the radio ever reports above the measured full scale
+        self.progressBarSignal.setValue(min(self.sdr.SignalStrength, self.sdr.SignalMax))
