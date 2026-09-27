@@ -4,9 +4,9 @@ import serial
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtCore import Qt, QSignalBlocker, QTimer
 from PyQt6.QtWidgets import (QAbstractSpinBox, QCheckBox, QComboBox, QDial,
-        QDialog, QDoubleSpinBox, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-        QMessageBox, QPushButton, QRadioButton, QButtonGroup, QSlider,
-        QVBoxLayout)
+        QDoubleSpinBox, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
+        QMainWindow, QMessageBox, QPushButton, QRadioButton, QButtonGroup,
+        QSlider, QVBoxLayout, QWidget)
 
 from .constants import IMG_DIR, TuningSteps
 from .radio_controller import RadioController
@@ -20,7 +20,7 @@ def _format_hz(hz):
     return f'{hz:g} Hz'
 
 
-class MainWindow(QDialog):
+class MainWindow(QMainWindow):
     def __init__(self, sdr, parent=None):
         super().__init__(parent)
         # sdr: an RX320, or any object with the same interface (e.g. a fake
@@ -35,10 +35,11 @@ class MainWindow(QDialog):
 
         self.dialStart = 0
 
-        # Watches for the radio connection dropping (e.g. USB unplugged)
-        self.connectionTimer = QTimer(self)
-        self.connectionTimer.setInterval(500)
-        self.connectionTimer.timeout.connect(self._check_connection)
+        # While connected: refreshes the status bar and watches for the
+        # connection dropping (e.g. USB unplugged)
+        self.statusTimer = QTimer(self)
+        self.statusTimer.setInterval(500)
+        self.statusTimer.timeout.connect(self._update_status)
 
         self.modeGroupBox, self.modeButtonGroup = self._make_radio_group(
             'Mode', self.Modes, 0, self.on_mode_changed)
@@ -66,8 +67,16 @@ class MainWindow(QDialog):
         mainLayout.addWidget(self.vfoGroupBox, 1, 3)
         mainLayout.addWidget(self.sliderGroupBox, 1, 4)
         mainLayout.addLayout(self.bottomLayout, 2, 0, 1, 4)
-        self.setLayout(mainLayout)
+        centralWidget = QWidget()
+        centralWidget.setLayout(mainLayout)
+        self.setCentralWidget(centralWidget)
         self.setWindowTitle("RX320")
+
+        self.labelConnection = QLabel()
+        self.labelSignal = QLabel()
+        self.statusBar().addWidget(self.labelConnection)
+        self.statusBar().addPermanentWidget(self.labelSignal)
+        self.labelConnection.setText('Disconnected')
 
         self.set_controls_enabled(False)
 
@@ -77,8 +86,6 @@ class MainWindow(QDialog):
         btn = QPushButton(text)
         if icon:
             btn.setIcon(QIcon(icon))
-        btn.setDefault(False)
-        btn.setAutoDefault(False)
         if slot:
             btn.clicked.connect(slot)
         return btn
@@ -353,12 +360,10 @@ class MainWindow(QDialog):
     def _quit(self):
         self.close()
 
-    def done(self, result):
-        # Every way a QDialog closes (Quit, window X, Esc) ends up here.
-        # Stop the serial worker thread, otherwise the non-daemon thread
-        # keeps the process alive after the window is gone.
+    def closeEvent(self, event):
+        # Quit and the window's X button both end up here
         self._disconnect()
-        super().done(result)
+        super().closeEvent(event)
 
     def _connect(self):
         serialPort = self.comboBoxSerialPort.currentText()
@@ -381,7 +386,8 @@ class MainWindow(QDialog):
 
         # Enable control surfaces
         self.set_controls_enabled(True)
-        self.connectionTimer.start()
+        self.labelConnection.setText(f'Connected: {serialPort}')
+        self.statusTimer.start()
 
     def _sync_radio_to_gui(self):
         # Push every GUI setting to the radio, which the driver has just reset
@@ -396,16 +402,21 @@ class MainWindow(QDialog):
         self.sdr.SetAttenuation(self.sliderVol.value(), 'Speaker')
 
     def _disconnect(self):
-        self.connectionTimer.stop()
+        self.statusTimer.stop()
 
         # Disable control surfaces
         self.set_controls_enabled(False)
+        self.labelConnection.setText('Disconnected')
+        self.labelSignal.clear()
 
         # Always close the port, even if the connection was already lost
         self.sdr.Disconnect()
 
-    def _check_connection(self):
+    def _update_status(self):
         if not self.sdr.Connected:
             self._disconnect()
+            self.labelConnection.setText('Connection lost')
             QMessageBox.warning(self, 'Connection lost',
                                 'Lost connection to the radio. Check the cable and reconnect.')
+            return
+        self.labelSignal.setText(f'Signal: {self.sdr.SignalStrength}')

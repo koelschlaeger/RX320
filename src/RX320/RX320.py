@@ -35,6 +35,11 @@ class RX320():
         # Live status: goes False on its own if the port is lost
         return self.sdr is not None and self.sdr.IsOpen()
 
+    @property
+    def SignalStrength(self):
+        # Latest raw reading polled from the radio, or None when not connected
+        return self.sdr.RSI if self.Connected else None
+
     def Connect(self, comPort):
         self.sdr = RX320_Driver(comPort)
         self.sdr.OpenSerial()
