@@ -34,6 +34,24 @@ def test_starts_disconnected(window):
     assert not window.progressBarSignal.isVisible()
 
 
+def test_connection_buttons_follow_state(qtbot, window, radio):
+    def enabled():
+        return {name: widget.isEnabled() for name, widget in [
+            ('connect', button(window, 'Connect')),
+            ('disconnect', button(window, 'Disconnect')),
+            ('refresh', button(window, 'Refresh')),
+            ('ports', window.comboBoxSerialPort)]}
+
+    disconnected = {'connect': True, 'disconnect': False, 'refresh': True, 'ports': True}
+    assert enabled() == disconnected
+
+    button(window, 'Connect').click()
+    assert enabled() == {'connect': False, 'disconnect': True, 'refresh': False, 'ports': False}
+
+    radio.connected = False  # connection lost: can connect again
+    qtbot.waitUntil(lambda: enabled() == disconnected)
+
+
 def test_connect_syncs_radio_with_volume_last(window, radio):
     button(window, 'Connect').click()
     assert radio.calls == [

@@ -51,6 +51,20 @@ def test_unplug_is_detected(qtbot, app, pty_radio, dialogs):
     assert not driver.com.is_open
 
 
+def test_connecting_again_replaces_the_driver(pty_radio):
+    radio = RX320()
+    radio.connect(pty_radio.port)
+    first = radio.sdr
+    radio.connect(pty_radio.port)
+    try:
+        assert radio.sdr is not first
+        assert not first.queue_thread.is_alive()  # no orphaned worker
+        assert not first.com.is_open
+        assert radio.connected
+    finally:
+        radio.disconnect()
+
+
 def test_close_stops_the_driver(app):
     driver = app.sdr.sdr
     app.close()

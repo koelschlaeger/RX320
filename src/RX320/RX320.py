@@ -46,6 +46,7 @@ class RX320():
         return self.sdr.rsi if self.connected else None
 
     def connect(self, port):
+        self.disconnect()   # Never leave a previous driver running
         self.sdr = RX320_Driver(port)
         self.sdr.open_serial()
 

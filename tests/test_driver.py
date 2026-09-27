@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from fakes import FakeSerial, tune_bytes, wait_until
@@ -141,6 +143,16 @@ def test_lost_port_stops_worker_cleanly(running):
     wait_until(lambda: not running.queue_thread.is_alive())
     assert not running.is_open()
     running.close_serial()  # still safe afterwards
+
+
+def test_open_twice_keeps_one_worker(running):
+    worker = running.queue_thread
+    wait_until(lambda: len(running.com.commands()) >= 3)  # power-up sent
+    assert running.open_serial() is True
+    assert running.queue_thread is worker
+    time.sleep(0.3)
+    power_up_tune = tune_bytes(0.5, 'AM', 8000)
+    assert running.com.commands().count(power_up_tune) == 1  # not re-sent
 
 
 def test_open_failure_returns_false():

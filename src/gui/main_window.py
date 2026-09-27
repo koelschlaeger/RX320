@@ -149,16 +149,16 @@ class MainWindow(QMainWindow):
         self._refresh_serial_ports()
 
         pushButtonQuit = self._make_button('Quit', slot=self._quit)
-        pushButtonConnect = self._make_button('Connect', slot=self._connect)
-        pushButtonDisconnect = self._make_button('Disconnect', slot=self._disconnect)
+        self.pushButtonConnect = self._make_button('Connect', slot=self._connect)
+        self.pushButtonDisconnect = self._make_button('Disconnect', slot=self._disconnect)
         self.pushButtonMute = self._make_button('Mute', slot=self.on_mute)
-        pushButtonRefreshSerialPorts = self._make_button('Refresh', slot=self._refresh_serial_ports)
+        self.pushButtonRefreshSerialPorts = self._make_button('Refresh', slot=self._refresh_serial_ports)
 
         self.bottomLayout.addWidget(pushButtonQuit)
         self.bottomLayout.addWidget(self.comboBoxSerialPort)
-        self.bottomLayout.addWidget(pushButtonRefreshSerialPorts)
-        self.bottomLayout.addWidget(pushButtonConnect)
-        self.bottomLayout.addWidget(pushButtonDisconnect)
+        self.bottomLayout.addWidget(self.pushButtonRefreshSerialPorts)
+        self.bottomLayout.addWidget(self.pushButtonConnect)
+        self.bottomLayout.addWidget(self.pushButtonDisconnect)
         self.bottomLayout.addWidget(self.pushButtonMute)
 
     def _create_vfo_group(self):
@@ -359,6 +359,11 @@ class MainWindow(QMainWindow):
     def set_controls_enabled(self, enabled: bool):
         for widget in self._controls:
             widget.setDisabled(not enabled)
+        # Connection controls
+        for widget in (self.pushButtonConnect, self.pushButtonRefreshSerialPorts,
+                       self.comboBoxSerialPort):
+            widget.setEnabled(not enabled)
+        self.pushButtonDisconnect.setEnabled(enabled)
 
     def _quit(self):
         self.close()

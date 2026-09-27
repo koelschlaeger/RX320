@@ -41,6 +41,9 @@ class RX320_Driver():
         self.rsi = 0
 
     def open_serial(self):
+        if self.queue_thread is not None and self.queue_thread.is_alive():
+            # Already open and running: don't start a second worker
+            return True
         if not self.com.is_open:
             try:
                 self.com.open()
