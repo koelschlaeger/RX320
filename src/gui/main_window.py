@@ -34,7 +34,6 @@ class MainWindow(QMainWindow):
         self.radio = RadioController(self.sdr)
 
         self.Modes = self.sdr.Modes
-        self.Target = self.sdr.Target
         self.AGCModes = self.sdr.AGCModes
         self.Filters = self.sdr.Filters
 
