@@ -10,91 +10,30 @@ from threading import Event, Thread
 
 import serial
 
+from RX320 import RX320_Data as data
+
 # Get/Set functions are thread-safe as they only append to the queue, which
 # a worker thread (_ServiceQueue) drains to the serial port.
-
-BAUDRATE = 1200
-BYTESIZE = 8
-PARITY = 'N'
 
 POLL_INTERVAL = 0.2  # Seconds of idle time before polling signal strength
 REPLY_LEN = 4        # Reply to 'X': b'X' + 16-bit value + b'\r'
 
 class RX320_Driver():
-    MinFreq = 0.5
-    MaxFreq = 30
-
-    MODES = dict({
-        'AM':  b'M0',     #M0
-        'USB': b'M1',     #M1
-        'LSB': b'M2',     #M2
-        'CW':  b'M3'      #M3
-        })
-
-    FILTERS = dict({
-        300: b'\x57\x20',       #W + binary(0-33)
-        330: b'\x57\x1F',
-        375: b'\x57\x1E',
-        450: b'\x57\x1D',
-        525: b'\x57\x1C',
-        600: b'\x57\x1B',
-        675: b'\x57\x1A',
-        750: b'\x57\x19',
-        900: b'\x57\x18',
-        1050:b'\x57\x17',
-        1200:b'\x57\x16',
-        1350:b'\x57\x15',
-        1500:b'\x57\x14',
-        1650:b'\x57\x13',
-        1800:b'\x57\x12',
-        1950:b'\x57\x11',
-        2100:b'\x57\x10',
-        2250:b'\x57\x0F',
-        2400:b'\x57\x0E',
-        2550:b'\x57\x0D',
-        2700:b'\x57\x0C',
-        2850:b'\x57\x0B',
-        3000:b'\x57\x0A',
-        3300:b'\x57\x09',
-        3600:b'\x57\x08',
-        3900:b'\x57\x07',
-        4200:b'\x57\x06',
-        4500:b'\x57\x05',
-        4800:b'\x57\x04',
-        5100:b'\x57\x03',
-        5400:b'\x57\x02',
-        5700:b'\x57\x01',
-        6000:b'\x57\x00',
-        8000:b'\x57\x21'
-        })
-
-    AGC = dict({
-         "Slow"   : b'G1',    #G1
-         "Medium" : b'G2',    #G2
-         "Fast"   : b'G3' })  #G3
-
-    VOL = dict({
-        'Line'    : b'A',    #A <00> <volume 0-63>
-        'Speaker' : b'V',    #V <00> <volume 0-63>
-        'Both'    : b'C'     #C <00> <volume 0-63>
-        })
-
-    # Offset direction applied to the tuning frequency for each mode
-    MODE_CORRECTION = dict({
-        'AM'  :  0,
-        'USB' :  1,
-        'LSB' : -1,
-        'CW'  : -1
-        })
+    # Lookup by name, e.g. MODES['USB'].command -> b'M1'
+    MODES = {m.name: m for m in data.MODES}
+    FILTERS = {f.bandwidth: f for f in data.FILTERS}
+    AGC = {m.name: m for m in data.AGC_MODES}
+    VOL = {v.name: v for v in data.VOLUME_TARGETS}
 
     def __init__(self, ComPort):
         # Setup serial interface
         self.com = serial.Serial()
         self.com.port = ComPort # SERIALPORT
-        self.com.baudrate = BAUDRATE
-        self.com.bytesize = BYTESIZE
-        self.com.parity = PARITY
-        self.com.timeout = 0.75
+        settings = data.SerialSettings()
+        self.com.baudrate = settings.baudrate
+        self.com.bytesize = settings.bytesize
+        self.com.parity = settings.parity
+        self.com.timeout = settings.timeout
         # Setup message queue and worker thread state
         self.msgQueue = Queue()
         self.queueThread = None
@@ -144,28 +83,28 @@ class RX320_Driver():
 
     def SetAttenuation(self, level=63, cmd='Both'):
         if ((level >= 0) and (level <= 63)):
-            self._QueueWrite(struct.pack('cBB', self.VOL[cmd], 0, level))
+            self._QueueWrite(struct.pack('cBB', self.VOL[cmd].command, 0, level))
             return True
         else:
             return False
 
     def SetFilter(self, BandWidth):
         if BandWidth in self.FILTERS:
-            self._QueueWrite(struct.pack('2s', self.FILTERS[BandWidth]))
+            self._QueueWrite(struct.pack('2s', self.FILTERS[BandWidth].command))
             return True
         else:
             return False
 
     def SetAGC(self, mode):
         if mode in self.AGC:
-            self._QueueWrite(struct.pack('2s', self.AGC[mode]))
+            self._QueueWrite(struct.pack('2s', self.AGC[mode].command))
             return True
         else:
             return False
 
     def SetMode(self, mode):
         if mode in self.MODES:
-            self._QueueWrite(struct.pack('2s', self.MODES[mode]))
+            self._QueueWrite(struct.pack('2s', self.MODES[mode].command))
             return True
         else:
             return False
@@ -176,7 +115,7 @@ class RX320_Driver():
     # cwbfo: CW Beat Freq Offset
     def SetVFO(self, freq, mode, bw, cwbfo=0):
         # Mode Correction
-        mCorr = self.MODE_CORRECTION.get(mode, 0)
+        mCorr = self.MODES[mode].correction
 
         # Filter Correction
         fCorr = (bw / 2) + 200

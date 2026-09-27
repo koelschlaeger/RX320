@@ -29,7 +29,7 @@ def test_connect_programs_radio_with_volume_last(app, pty_radio):
 
 def test_mode_change_retunes_over_the_wire(app, pty_radio):
     app.spinBoxVFOA.setValue(7.2)
-    app.modeButtonGroup.button(2).click()  # USB
+    app.modeButtonGroup.button(1).click()  # USB
     # The radio must end on a tune calculated for USB. It may arrive before
     # M1: a still-queued AM tune is replaced in place by the USB retune.
     final = tune_bytes(7.2, 'USB', 8000)

@@ -97,8 +97,13 @@ def test_signal_meter(qtbot, connected, radio, reading, shown):
 
 # --- Mode, AGC, filter ---------------------------------------------------------
 
+def test_mode_button_order(window):
+    labels = [b.text() for b in window.modeButtonGroup.buttons()]
+    assert labels == ['AM', 'USB', 'LSB', 'CW']
+
+
 def test_mode_click(connected, radio):
-    connected.modeButtonGroup.button(2).click()
+    connected.modeButtonGroup.button(1).click()
     assert radio.calls == [('SetMode', 'USB')]
     assert connected.labelMode_Act.text() == 'USB'
 

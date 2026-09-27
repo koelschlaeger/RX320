@@ -33,7 +33,7 @@ def saved_session(make_window):
     window.spinBoxVFOA.setValue(7.2)
     window.on_vfo_store()
     window.spinBoxVFOA.setValue(14.074)
-    window.modeButtonGroup.button(1).click()   # LSB
+    window.modeButtonGroup.button(2).click()   # LSB
     window.agcButtonGroup.button(0).click()    # Slow
     window.stepButtonGroup.button(1).click()   # 100 Hz
     window.sliderBW.setValue(22)               # 3000 Hz
