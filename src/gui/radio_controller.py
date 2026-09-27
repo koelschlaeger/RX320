@@ -6,11 +6,11 @@ class RadioController:
 
     def __init__(self, sdr):
         self.sdr = sdr
-        self.vfo_a = sdr.DefaultFreq  # MHz
-        self.vfo_b = sdr.DefaultFreq  # MHz
+        self.vfo_a = sdr.DEFAULT_FREQ  # MHz
+        self.vfo_b = sdr.DEFAULT_FREQ  # MHz
 
     def _clamp(self, freq_mhz: float) -> float:
-        return max(self.sdr.MinFreq, min(self.sdr.MaxFreq, freq_mhz))
+        return max(self.sdr.MIN_FREQ, min(self.sdr.MAX_FREQ, freq_mhz))
 
     def restore(self, vfo_a: float, vfo_b: float):
         """Set both VFOs (clamped) without sending anything to the radio."""
@@ -20,7 +20,7 @@ class RadioController:
     def set_vfo_a(self, freq_mhz: float) -> float:
         """Set VFO A to an absolute frequency (clamped). Returns the applied value."""
         self.vfo_a = self._clamp(freq_mhz)
-        self.sdr.SetVFO(self.vfo_a)
+        self.sdr.set_vfo(self.vfo_a)
         return self.vfo_a
 
     def step_vfo_a(self, step_mhz: float) -> float:
@@ -36,5 +36,5 @@ class RadioController:
         """Swap A and B, and re-tune the radio to the new A. Returns (a, b)."""
         self.vfo_a, self.vfo_b = self.vfo_b, self.vfo_a
         self.vfo_a = self._clamp(self.vfo_a)  # now actually protected
-        self.sdr.SetVFO(self.vfo_a)
+        self.sdr.set_vfo(self.vfo_a)
         return self.vfo_a, self.vfo_b

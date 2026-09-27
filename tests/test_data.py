@@ -40,7 +40,7 @@ def test_defaults_are_real_table_entries():
 
 
 def test_wrapper_names_come_from_the_tables():
-    assert RX320.Modes == tuple(m.name for m in data.MODES)
-    assert RX320.AGCModes == tuple(a.name for a in data.AGC_MODES)
-    assert RX320.Filters == tuple(f.bandwidth for f in data.FILTERS)
-    assert (RX320.MinFreq, RX320.MaxFreq) == (data.MINFREQ, data.MAXFREQ)
+    assert RX320.MODES == tuple(m.name for m in data.MODES)
+    assert RX320.AGC_MODES == tuple(a.name for a in data.AGC_MODES)
+    assert RX320.FILTERS == tuple(f.bandwidth for f in data.FILTERS)
+    assert (RX320.MIN_FREQ, RX320.MAX_FREQ) == (data.MINFREQ, data.MAXFREQ)

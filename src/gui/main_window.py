@@ -33,9 +33,9 @@ class MainWindow(QMainWindow):
         self.sdr = sdr
         self.radio = RadioController(self.sdr)
 
-        self.Modes = self.sdr.Modes
-        self.AGCModes = self.sdr.AGCModes
-        self.Filters = self.sdr.Filters
+        self.Modes = self.sdr.MODES
+        self.AGCModes = self.sdr.AGC_MODES
+        self.Filters = self.sdr.FILTERS
 
         self.dialStart = 0
 
@@ -46,9 +46,9 @@ class MainWindow(QMainWindow):
         self.statusTimer.timeout.connect(self._update_status)
 
         self.modeGroupBox, self.modeButtonGroup = self._make_radio_group(
-            'Mode', self.Modes, self.Modes.index(self.sdr.DefaultMode), self.on_mode_changed)
+            'Mode', self.Modes, self.Modes.index(self.sdr.DEFAULT_MODE), self.on_mode_changed)
         self.agcGroupBox, self.agcButtonGroup = self._make_radio_group(
-            'AGC', self.AGCModes, self.AGCModes.index(self.sdr.DefaultAGC), self.on_agc_changed)
+            'AGC', self.AGCModes, self.AGCModes.index(self.sdr.DEFAULT_AGC), self.on_agc_changed)
         self.stepGroupBox, self.stepButtonGroup = self._make_radio_group(
             'Step', [_format_hz(hz) for hz in TuningSteps], TuningSteps.index(DEFAULT_STEP),
             self.on_step_changed)
@@ -82,7 +82,7 @@ class MainWindow(QMainWindow):
 
         # Signal meter, shown only while connected
         self.progressBarSignal = QProgressBar()
-        self.progressBarSignal.setRange(0, self.sdr.SignalMax)
+        self.progressBarSignal.setRange(0, self.sdr.SIGNAL_MAX)
         self.progressBarSignal.setFormat('Signal %v')
         self.progressBarSignal.setFixedWidth(160)
         self.progressBarSignal.hide()
@@ -120,7 +120,7 @@ class MainWindow(QMainWindow):
 
     def _make_freq_box(self) -> QDoubleSpinBox:
         spinBox = QDoubleSpinBox()
-        spinBox.setRange(self.sdr.MinFreq, self.sdr.MaxFreq)
+        spinBox.setRange(self.sdr.MIN_FREQ, self.sdr.MAX_FREQ)
         spinBox.setDecimals(6)
         spinBox.setSuffix(' MHz')
         return spinBox
@@ -205,20 +205,20 @@ class MainWindow(QMainWindow):
         labelBW = QLabel('BW')
 
         self.sliderLine = QSlider(Qt.Orientation.Vertical)
-        self.sliderLine.setRange(self.sdr.MinVolume, 0)
+        self.sliderLine.setRange(self.sdr.MIN_VOLUME, 0)
         self.sliderLine.setTickPosition(QSlider.TickPosition.TicksLeft)
-        self.sliderLine.setValue(self.sdr.MinVolume)
+        self.sliderLine.setValue(self.sdr.MIN_VOLUME)
         self.sliderLine.valueChanged.connect(self.on_line_level_changed)
 
         self.sliderVol = QSlider(Qt.Orientation.Vertical)
-        self.sliderVol.setRange(self.sdr.MinVolume, 0)
+        self.sliderVol.setRange(self.sdr.MIN_VOLUME, 0)
         self.sliderVol.setTickPosition(QSlider.TickPosition.TicksLeft)
-        self.sliderVol.setValue(self.sdr.MinVolume)
+        self.sliderVol.setValue(self.sdr.MIN_VOLUME)
         self.sliderVol.valueChanged.connect(self.on_volume_changed)
 
         self.sliderBW = QSlider(Qt.Orientation.Vertical)
         self.sliderBW.setRange(0, len(self.Filters) - 1)
-        self.sliderBW.setValue(self.Filters.index(self.sdr.DefaultFilter))
+        self.sliderBW.setValue(self.Filters.index(self.sdr.DEFAULT_FILTER))
         # Only send the filter (and the retune it triggers) on release, so a
         # fast drag doesn't queue up seconds of serial commands.
         self.sliderBW.setTracking(False)
@@ -291,8 +291,8 @@ class MainWindow(QMainWindow):
         self.radio.set_vfo_a(freq)
 
     def on_mute(self):
-        self.sliderLine.setValue(self.sdr.MinVolume)
-        self.sliderVol.setValue(self.sdr.MinVolume)
+        self.sliderLine.setValue(self.sdr.MIN_VOLUME)
+        self.sliderVol.setValue(self.sdr.MIN_VOLUME)
 
     def on_dial_changed(self, value):
         span = self.dial.maximum() - self.dial.minimum()
@@ -310,15 +310,15 @@ class MainWindow(QMainWindow):
     def on_line_level_changed(self, value):
         if self.checkBoxLink.isChecked():
             self.sliderVol.setValue(value)
-        self.sdr.SetAttenuation(value, 'Line')
+        self.sdr.set_attenuation(value, 'Line')
 
     def on_volume_changed(self, value):
         if self.checkBoxLink.isChecked():
             self.sliderLine.setValue(value)
-        self.sdr.SetAttenuation(value, 'Speaker')
+        self.sdr.set_attenuation(value, 'Speaker')
 
     def on_bandwidth_changed(self, filter_id):
-        self.sdr.SetFilter(self.Filters[filter_id])
+        self.sdr.set_filter(self.Filters[filter_id])
         self.labelBW_Act.setText(str(self.Filters[filter_id]))
 
     def on_bandwidth_moved(self, position):
@@ -332,11 +332,11 @@ class MainWindow(QMainWindow):
             self.sliderLine.setValue(min_value)
 
     def on_mode_changed(self, mode_id):
-        self.sdr.SetMode(self.Modes[mode_id])
+        self.sdr.set_mode(self.Modes[mode_id])
         self.labelMode_Act.setText(self.Modes[mode_id])
 
     def on_agc_changed(self, agc_id):
-        self.sdr.SetAGC(self.AGCModes[agc_id])
+        self.sdr.set_agc(self.AGCModes[agc_id])
         self.labelAGC_Act.setText(self.AGCModes[agc_id])
 
     def on_step_changed(self, step_id):
@@ -440,12 +440,12 @@ class MainWindow(QMainWindow):
                                'No serial port is selected. Click Refresh and try again.')
             return
         try:
-            self.sdr.Connect(serialPort)
+            self.sdr.connect(serialPort)
         except (OSError, serial.SerialException) as e:
             QMessageBox.critical(self, 'Connection failed',
                                  f'Could not connect to {serialPort}:\n{e}')
             return
-        if not self.sdr.Connected:
+        if not self.sdr.connected:
             QMessageBox.critical(self, 'Connection failed',
                                  f'Could not open {serialPort}.')
             return
@@ -463,12 +463,12 @@ class MainWindow(QMainWindow):
         # to its power-up defaults. Mode and filter go before the VFO because
         # the tuning command depends on them; volume goes last so the radio
         # doesn't briefly play audio at the wrong frequency.
-        self.sdr.SetMode(self.Modes[self.modeButtonGroup.checkedId()])
-        self.sdr.SetFilter(self.Filters[self.sliderBW.value()])
-        self.sdr.SetAGC(self.AGCModes[self.agcButtonGroup.checkedId()])
+        self.sdr.set_mode(self.Modes[self.modeButtonGroup.checkedId()])
+        self.sdr.set_filter(self.Filters[self.sliderBW.value()])
+        self.sdr.set_agc(self.AGCModes[self.agcButtonGroup.checkedId()])
         self.radio.set_vfo_a(self.radio.vfo_a)
-        self.sdr.SetAttenuation(self.sliderLine.value(), 'Line')
-        self.sdr.SetAttenuation(self.sliderVol.value(), 'Speaker')
+        self.sdr.set_attenuation(self.sliderLine.value(), 'Line')
+        self.sdr.set_attenuation(self.sliderVol.value(), 'Speaker')
 
     def _disconnect(self):
         self.statusTimer.stop()
@@ -480,14 +480,14 @@ class MainWindow(QMainWindow):
         self.progressBarSignal.reset()
 
         # Always close the port, even if the connection was already lost
-        self.sdr.Disconnect()
+        self.sdr.disconnect()
 
     def _update_status(self):
-        if not self.sdr.Connected:
+        if not self.sdr.connected:
             self._disconnect()
             self.labelConnection.setText('Connection lost')
             QMessageBox.warning(self, 'Connection lost',
                                 'Lost connection to the radio. Check the cable and reconnect.')
             return
         # Clamp in case the radio ever reports above the measured full scale
-        self.progressBarSignal.setValue(min(self.sdr.SignalStrength, self.sdr.SignalMax))
+        self.progressBarSignal.setValue(min(self.sdr.signal_strength, self.sdr.SIGNAL_MAX))

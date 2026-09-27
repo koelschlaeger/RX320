@@ -2,14 +2,14 @@ from gui.radio_controller import RadioController
 
 
 class Sdr:
-    MinFreq = 0.5
-    MaxFreq = 30
-    DefaultFreq = 0.5
+    MIN_FREQ = 0.5
+    MAX_FREQ = 30
+    DEFAULT_FREQ = 0.5
 
     def __init__(self):
         self.tuned = []
 
-    def SetVFO(self, freq):
+    def set_vfo(self, freq):
         self.tuned.append(freq)
 
 

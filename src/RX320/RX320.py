@@ -9,93 +9,93 @@ from RX320 import RX320_Data as data
 
 
 class RX320():
-    Modes = tuple(m.name for m in data.MODES)
-    _Target = tuple(t.name for t in data.VOLUME_TARGETS)
-    AGCModes = tuple(m.name for m in data.AGC_MODES)
-    Filters = tuple(f.bandwidth for f in data.FILTERS)
+    MODES = tuple(m.name for m in data.MODES)
+    _TARGETS = tuple(t.name for t in data.VOLUME_TARGETS)
+    AGC_MODES = tuple(m.name for m in data.AGC_MODES)
+    FILTERS = tuple(f.bandwidth for f in data.FILTERS)
 
     # Tuning range (MHz), available before a driver is connected
-    MinFreq = data.MINFREQ
-    MaxFreq = data.MAXFREQ
+    MIN_FREQ = data.MINFREQ
+    MAX_FREQ = data.MAXFREQ
 
     # Full-scale signal strength reading (measured on the radio)
-    SignalMax = data.SIGNAL_MAX
-    MinVolume = -data.ATTENUATION_RANGE_DB      # slider value for mute, in dB
+    SIGNAL_MAX = data.SIGNAL_MAX
+    MIN_VOLUME = -data.ATTENUATION_RANGE_DB      # slider value for mute, in dB
 
-    DefaultMode = data.DEFAULT_MODE
-    DefaultFilter = data.DEFAULT_FILTER
-    DefaultAGC = data.DEFAULT_AGC
-    DefaultFreq = data.DEFAULT_FREQ
+    DEFAULT_MODE = data.DEFAULT_MODE
+    DEFAULT_FILTER = data.DEFAULT_FILTER
+    DEFAULT_AGC = data.DEFAULT_AGC
+    DEFAULT_FREQ = data.DEFAULT_FREQ
 
     # Current tuning, kept so mode and filter changes can retune
-    _Mode = DefaultMode
-    _Filter = DefaultFilter
-    _Freq = DefaultFreq
+    _mode = DEFAULT_MODE
+    _filter = DEFAULT_FILTER
+    _freq = DEFAULT_FREQ
 
     def __init__(self):
         self.sdr = None
 
     @property
-    def Connected(self):
+    def connected(self):
         # Live status: goes False on its own if the port is lost
-        return self.sdr is not None and self.sdr.IsOpen()
+        return self.sdr is not None and self.sdr.is_open()
 
     @property
-    def SignalStrength(self):
+    def signal_strength(self):
         # Latest raw reading polled from the radio, or None when not connected
-        return self.sdr.RSI if self.Connected else None
+        return self.sdr.rsi if self.connected else None
 
-    def Connect(self, comPort):
-        self.sdr = RX320_Driver(comPort)
-        self.sdr.OpenSerial()
+    def connect(self, port):
+        self.sdr = RX320_Driver(port)
+        self.sdr.open_serial()
 
-    def Disconnect(self):
+    def disconnect(self):
         # Safe to call at any time, including after the connection was lost
         if self.sdr is not None:
-            self.sdr.CloseSerial()
+            self.sdr.close_serial()
 
-    def SetAttenuation(self, Value, Target):
+    def set_attenuation(self, value, target):
         # slider dB [-96, 0] -> attenuation code [63, 0]
-        if Target not in self._Target:
+        if target not in self._TARGETS:
             raise IndexError()  # Invalid command
-        attenuation = int(-Value * data.ATTENUATION_MAX / data.ATTENUATION_RANGE_DB)
-        self.sdr.SetAttenuation(attenuation, Target)
+        attenuation = int(-value * data.ATTENUATION_MAX / data.ATTENUATION_RANGE_DB)
+        self.sdr.set_attenuation(attenuation, target)
 
-    def SetVFO(self, frequency):
-        if self.MinFreq <= frequency <= self.MaxFreq:
-            self._Freq = frequency
-            self.sdr.SetVFO(self._Freq, self._Mode, self._Filter)
+    def set_vfo(self, frequency):
+        if self.MIN_FREQ <= frequency <= self.MAX_FREQ:
+            self._freq = frequency
+            self.sdr.set_vfo(self._freq, self._mode, self._filter)
         else:
             # VFO frequency out of range
             raise ValueError()
 
-    def SetAGC(self, Mode):
-        if Mode in self.AGCModes:
-            self.sdr.SetAGC(Mode)
+    def set_agc(self, mode):
+        if mode in self.AGC_MODES:
+            self.sdr.set_agc(mode)
         else:
             # Invalid command
             raise IndexError()
 
-    def SetFilter(self, Bandwidth):
-        if Bandwidth in self.Filters:
-            self._Filter = Bandwidth
-            self.sdr.SetFilter(Bandwidth)
-            self._Retune()
+    def set_filter(self, bandwidth):
+        if bandwidth in self.FILTERS:
+            self._filter = bandwidth
+            self.sdr.set_filter(bandwidth)
+            self._retune()
         else:
             #Invalid filter selection
             raise IndexError()
 
-    def SetMode(self, Mode):
-        if Mode in self.Modes:
-            self._Mode = Mode
-            self.sdr.SetMode(Mode)
-            self._Retune()
+    def set_mode(self, mode):
+        if mode in self.MODES:
+            self._mode = mode
+            self.sdr.set_mode(mode)
+            self._retune()
         else:
-            # Invalid Mode
+            # Invalid mode
             raise IndexError()
 
-    def _Retune(self):
+    def _retune(self):
         # The tuning command encodes mode and filter offsets, so resend it
         # whenever either changes.
-        self.sdr.SetVFO(self._Freq, self._Mode, self._Filter)
+        self.sdr.set_vfo(self._freq, self._mode, self._filter)
 

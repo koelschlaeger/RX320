@@ -15,7 +15,7 @@ def app(make_window, pty_radio):
     window.comboBoxSerialPort.addItem(pty_radio.port)
     window.comboBoxSerialPort.setCurrentText(pty_radio.port)
     window._connect()
-    assert window.sdr.Connected
+    assert window.sdr.connected
     return window
 
 
@@ -47,14 +47,14 @@ def test_unplug_is_detected(qtbot, app, pty_radio, dialogs):
     pty_radio.unplug()
     qtbot.waitUntil(lambda: app.labelConnection.text() == 'Connection lost', timeout=3000)
     assert dialogs == [('warning', 'Connection lost')]
-    assert not driver.queueThread.is_alive()
+    assert not driver.queue_thread.is_alive()
     assert not driver.com.is_open
 
 
 def test_close_stops_the_driver(app):
     driver = app.sdr.sdr
     app.close()
-    assert not driver.queueThread.is_alive()
+    assert not driver.queue_thread.is_alive()
     assert not driver.com.is_open
 
 
@@ -64,7 +64,7 @@ def test_fast_dial_spin_is_merged(app, pty_radio):
     com = app.sdr.sdr.com
     real_write = com.write
     com.write = lambda data: (time.sleep(len(data) * 10 / 1200), real_write(data))[1]
-    wait_until(lambda: app.sdr.sdr.msgQueue.empty())
+    wait_until(lambda: app.sdr.sdr.msg_queue.empty())
     pty_radio.received.clear()
 
     app.stepButtonGroup.button(2).click()  # 1 kHz

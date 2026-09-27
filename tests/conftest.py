@@ -75,7 +75,7 @@ def connected(window, radio):
     """A window connected to the fake radio, with the connect-time sync
     calls cleared so tests see only what they trigger."""
     window._connect()
-    assert radio.Connected
+    assert radio.connected
     radio.calls.clear()
     return window
 

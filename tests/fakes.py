@@ -23,67 +23,63 @@ def wait_until(condition, timeout=3.0):
 def tune_bytes(freq, mode, bandwidth):
     """The N command the driver sends for this frequency/mode/filter."""
     driver = RX320_Driver('/dev/null')
-    driver.SetVFO(freq, mode, bandwidth)
-    return driver.msgQueue.get()[0]
+    driver.set_vfo(freq, mode, bandwidth)
+    return driver.msg_queue.get()[0]
 
 
 class FakeRadio:
     """Stands in for RX320 in GUI tests: records calls, no serial port."""
 
-    Modes = RX320.Modes
-    AGCModes = RX320.AGCModes
-    Filters = RX320.Filters
-    MinFreq = RX320.MinFreq
-    MaxFreq = RX320.MaxFreq
-    SignalMax = RX320.SignalMax
-    MinVolume = RX320.MinVolume
-    DefaultMode = RX320.DefaultMode
-    DefaultFilter = RX320.DefaultFilter
-    DefaultAGC = RX320.DefaultAGC
-    DefaultFreq = RX320.DefaultFreq
+    MODES = RX320.MODES
+    AGC_MODES = RX320.AGC_MODES
+    FILTERS = RX320.FILTERS
+    MIN_FREQ = RX320.MIN_FREQ
+    MAX_FREQ = RX320.MAX_FREQ
+    SIGNAL_MAX = RX320.SIGNAL_MAX
+    MIN_VOLUME = RX320.MIN_VOLUME
+    DEFAULT_MODE = RX320.DEFAULT_MODE
+    DEFAULT_FILTER = RX320.DEFAULT_FILTER
+    DEFAULT_AGC = RX320.DEFAULT_AGC
+    DEFAULT_FREQ = RX320.DEFAULT_FREQ
 
     def __init__(self):
         self.calls = []
-        self.connected = False
+        self.connected = False       # set False to simulate a lost connection
         self.signal = 0
         self.connect_result = True   # False: port opens but reports failure
-        self.connect_error = None    # exception for Connect() to raise
+        self.connect_error = None    # exception for connect() to raise
 
     @property
-    def Connected(self):
-        return self.connected
-
-    @property
-    def SignalStrength(self):
+    def signal_strength(self):
         return self.signal if self.connected else None
 
-    def Connect(self, port):
-        self.calls.append(('Connect', port))
+    def connect(self, port):
+        self.calls.append(('connect', port))
         if self.connect_error:
             raise self.connect_error
         self.connected = self.connect_result
 
-    def Disconnect(self):
-        self.calls.append(('Disconnect',))
+    def disconnect(self):
+        self.calls.append(('disconnect',))
         self.connected = False
 
-    def SetMode(self, mode):
-        self.calls.append(('SetMode', mode))
+    def set_mode(self, mode):
+        self.calls.append(('set_mode', mode))
 
-    def SetFilter(self, bandwidth):
-        self.calls.append(('SetFilter', bandwidth))
+    def set_filter(self, bandwidth):
+        self.calls.append(('set_filter', bandwidth))
 
-    def SetAGC(self, agc):
-        self.calls.append(('SetAGC', agc))
+    def set_agc(self, agc):
+        self.calls.append(('set_agc', agc))
 
-    def SetVFO(self, freq):
-        self.calls.append(('SetVFO', round(freq, 6)))
+    def set_vfo(self, freq):
+        self.calls.append(('set_vfo', round(freq, 6)))
 
-    def SetAttenuation(self, value, target):
-        self.calls.append(('SetAttenuation', value, target))
+    def set_attenuation(self, value, target):
+        self.calls.append(('set_attenuation', value, target))
 
     def named(self, name):
-        """Calls to one method, e.g. named('SetVFO') -> [('SetVFO', 7.2)]."""
+        """Calls to one method, e.g. named('set_vfo') -> [('set_vfo', 7.2)]."""
         return [c for c in self.calls if c[0] == name]
 
 

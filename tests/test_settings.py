@@ -69,13 +69,13 @@ def test_restoring_sends_nothing_until_connect(saved_session, make_window):
 
     window._connect()
     assert radio.calls == [
-        ('Connect', FAKE_PORTS[1]),
-        ('SetMode', 'LSB'),
-        ('SetFilter', 3000),
-        ('SetAGC', 'Slow'),
-        ('SetVFO', 14.074),
-        ('SetAttenuation', -96, 'Line'),
-        ('SetAttenuation', -96, 'Speaker'),
+        ('connect', FAKE_PORTS[1]),
+        ('set_mode', 'LSB'),
+        ('set_filter', 3000),
+        ('set_agc', 'Slow'),
+        ('set_vfo', 14.074),
+        ('set_attenuation', -96, 'Line'),
+        ('set_attenuation', -96, 'Speaker'),
     ]
 
 
