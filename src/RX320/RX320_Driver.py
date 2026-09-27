@@ -128,30 +128,44 @@ class RX320_Driver():
             self.queueThread.join()
         self.com.close()
 
+    def _QueueWrite(self, msg):
+        # Queue a setting command. If one of the same kind (same command
+        # letter, e.g. 'N' tune or 'V' speaker volume) is still waiting to be
+        # sent, overwrite it in place: only the latest value matters, and at
+        # 1200 baud a fast dial spin or slider drag would otherwise leave the
+        # radio seconds behind. Overwriting in place keeps the queue order.
+        with self.msgQueue.mutex:
+            pending = self.msgQueue.queue
+            for i, (queued, mode) in enumerate(pending):
+                if mode == 'W' and queued[:1] == msg[:1]:
+                    pending[i] = (msg, 'W')
+                    return
+        self.msgQueue.put((msg, 'W'))
+
     def SetAttenuation(self, level=63, cmd='Both'):
         if ((level >= 0) and (level <= 63)):
-            self.msgQueue.put((struct.pack('cBB', self.VOL[cmd], 0, level), 'W'))
+            self._QueueWrite(struct.pack('cBB', self.VOL[cmd], 0, level))
             return True
         else:
             return False
 
     def SetFilter(self, BandWidth):
         if BandWidth in self.FILTERS:
-            self.msgQueue.put((struct.pack('2s',self.FILTERS[BandWidth]), 'W'))
+            self._QueueWrite(struct.pack('2s', self.FILTERS[BandWidth]))
             return True
         else:
             return False
 
     def SetAGC(self, mode):
         if mode in self.AGC:
-            self.msgQueue.put((struct.pack('2s', self.AGC[mode]), 'W'))
+            self._QueueWrite(struct.pack('2s', self.AGC[mode]))
             return True
         else:
             return False
 
     def SetMode(self, mode):
         if mode in self.MODES:
-            self.msgQueue.put((struct.pack('2s', self.MODES[mode]), 'W'))
+            self._QueueWrite(struct.pack('2s', self.MODES[mode]))
             return True
         else:
             return False
@@ -174,8 +188,8 @@ class RX320_Driver():
         BFOTuningFactor = int((fCorr + cwbfo + 8000) * 2.73)
 
         # 'N' followed by each factor as a big-endian 16-bit value
-        self.msgQueue.put((struct.pack('>cHHH', b'N', CoarseTuningFactor,
-                                       FineTuningFactor, BFOTuningFactor), 'W'))
+        self._QueueWrite(struct.pack('>cHHH', b'N', CoarseTuningFactor,
+                                     FineTuningFactor, BFOTuningFactor))
 
     def GetSignalStrength(self):
         # Send X to request signal strength
