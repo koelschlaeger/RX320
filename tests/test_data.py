@@ -32,6 +32,13 @@ def test_tables_are_read_only():
         data.MODES[0].command = b'M9'
 
 
+def test_defaults_are_real_table_entries():
+    assert data.DEFAULT_MODE in [m.name for m in data.MODES]
+    assert data.DEFAULT_AGC in [a.name for a in data.AGC_MODES]
+    assert data.DEFAULT_FILTER in [f.bandwidth for f in data.FILTERS]
+    assert data.MINFREQ <= data.DEFAULT_FREQ <= data.MAXFREQ
+
+
 def test_wrapper_names_come_from_the_tables():
     assert RX320.Modes == tuple(m.name for m in data.MODES)
     assert RX320.AGCModes == tuple(a.name for a in data.AGC_MODES)

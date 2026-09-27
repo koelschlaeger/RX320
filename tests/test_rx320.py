@@ -60,6 +60,14 @@ def test_slider_value_maps_to_attenuation(rx, slider, attenuation):
     assert rx.sdr.sent == [bytes([ord('V'), 0, attenuation])]
 
 
+def test_attenuation_formula_matches_original_over_full_range(rx):
+    # The original code used the literal factor 0.65625 (= 63/96)
+    for slider in range(RX320.MinVolume, 1):
+        rx.sdr.sent.clear()
+        rx.SetAttenuation(slider, 'Line')
+        assert rx.sdr.sent == [bytes([ord('A'), 0, int(-0.65625 * slider)])], slider
+
+
 def test_invalid_attenuation_target_raises(rx):
     with pytest.raises(IndexError):
         rx.SetAttenuation(-10, 'Headphones')

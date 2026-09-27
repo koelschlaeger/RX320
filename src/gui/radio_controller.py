@@ -6,8 +6,8 @@ class RadioController:
 
     def __init__(self, sdr):
         self.sdr = sdr
-        self.vfo_a = 0.500  # MHz
-        self.vfo_b = 0.500  # MHz
+        self.vfo_a = sdr.DefaultFreq  # MHz
+        self.vfo_b = sdr.DefaultFreq  # MHz
 
     def _clamp(self, freq_mhz: float) -> float:
         return max(self.sdr.MinFreq, min(self.sdr.MaxFreq, freq_mhz))

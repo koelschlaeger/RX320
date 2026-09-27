@@ -88,3 +88,15 @@ VOLUME_TARGETS = (
 
 MINFREQ = 0.5   # MHz
 MAXFREQ = 30.0  # MHz
+
+# Power-up state the driver programs, and the GUI's initial settings
+DEFAULT_MODE = 'AM'
+DEFAULT_FILTER = 8000     # Hz
+DEFAULT_AGC = 'Medium'    # also the radio's own power-up default
+DEFAULT_FREQ = 0.5        # MHz
+
+# Volume: attenuation codes 0 (loudest) to 63 (quietest), 96 dB range
+ATTENUATION_MAX = 63
+ATTENUATION_RANGE_DB = 96
+
+SIGNAL_MAX = 10000        # full-scale signal strength reading (measured)

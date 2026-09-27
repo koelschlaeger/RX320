@@ -97,6 +97,24 @@ def test_signal_meter(qtbot, connected, radio, reading, shown):
 
 # --- Mode, AGC, filter ---------------------------------------------------------
 
+def test_initial_settings_come_from_the_radio(make_window, radio):
+    radio.DefaultMode = 'LSB'
+    radio.DefaultAGC = 'Fast'
+    radio.DefaultFilter = 3000
+    radio.DefaultFreq = 7.2
+    radio.MinVolume = -48
+    window = make_window(radio)
+    assert window.labelMode_Act.text() == 'LSB'
+    assert window.labelAGC_Act.text() == 'Fast'
+    assert window.labelBW_Act.text() == '3000'
+    assert window.spinBoxVFOA.value() == pytest.approx(7.2)
+    assert window.sliderVol.minimum() == window.sliderVol.value() == -48
+    button(window, 'Mute').setEnabled(True)
+    window.sliderVol.setValue(-10)
+    button(window, 'Mute').click()
+    assert window.sliderVol.value() == -48
+
+
 def test_mode_button_order(window):
     labels = [b.text() for b in window.modeButtonGroup.buttons()]
     assert labels == ['AM', 'USB', 'LSB', 'CW']

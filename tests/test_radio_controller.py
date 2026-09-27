@@ -4,6 +4,7 @@ from gui.radio_controller import RadioController
 class Sdr:
     MinFreq = 0.5
     MaxFreq = 30
+    DefaultFreq = 0.5
 
     def __init__(self):
         self.tuned = []

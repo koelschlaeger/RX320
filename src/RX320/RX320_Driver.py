@@ -81,8 +81,8 @@ class RX320_Driver():
                     return
         self.msgQueue.put((msg, 'W'))
 
-    def SetAttenuation(self, level=63, cmd='Both'):
-        if ((level >= 0) and (level <= 63)):
+    def SetAttenuation(self, level=data.ATTENUATION_MAX, cmd='Both'):
+        if ((level >= 0) and (level <= data.ATTENUATION_MAX)):
             self._QueueWrite(struct.pack('cBB', self.VOL[cmd].command, 0, level))
             return True
         else:
@@ -138,11 +138,10 @@ class RX320_Driver():
         # Reprogramming the radio at power-up requires setting the MODE,
         # FREQUENCY, FILTER and VOLUME level. To prevent unwanted audio
         # output the VOLUME setting should be done last.
-        self.SetVFO(0.500, 'AM', 8000)
-        # 8kHz filter
-        self.SetFilter(8000)
+        self.SetVFO(data.DEFAULT_FREQ, data.DEFAULT_MODE, data.DEFAULT_FILTER)
+        self.SetFilter(data.DEFAULT_FILTER)
         # Mute
-        self.SetAttenuation(63, 'Both')
+        self.SetAttenuation(data.ATTENUATION_MAX, 'Both')
 
     def _CommandWrite(self, cmd):
         self.com.write(cmd + b'\r')

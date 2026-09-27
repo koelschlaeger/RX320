@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (QAbstractSpinBox, QCheckBox, QComboBox, QDial,
         QMainWindow, QMessageBox, QProgressBar, QPushButton, QRadioButton,
         QButtonGroup, QSlider, QVBoxLayout, QWidget)
 
-from .constants import IMG_DIR, TuningSteps
+from .constants import IMG_DIR, TuningSteps, DEFAULT_STEP
 from .radio_controller import RadioController
 from .serial_utils import get_serial_ports
 
@@ -46,11 +46,11 @@ class MainWindow(QMainWindow):
         self.statusTimer.timeout.connect(self._update_status)
 
         self.modeGroupBox, self.modeButtonGroup = self._make_radio_group(
-            'Mode', self.Modes, 0, self.on_mode_changed)
+            'Mode', self.Modes, self.Modes.index(self.sdr.DefaultMode), self.on_mode_changed)
         self.agcGroupBox, self.agcButtonGroup = self._make_radio_group(
-            'AGC', ('Slow', 'Med', 'Fast'), 1, self.on_agc_changed)
+            'AGC', self.AGCModes, self.AGCModes.index(self.sdr.DefaultAGC), self.on_agc_changed)
         self.stepGroupBox, self.stepButtonGroup = self._make_radio_group(
-            'Step', [_format_hz(hz) for hz in TuningSteps], 3,
+            'Step', [_format_hz(hz) for hz in TuningSteps], TuningSteps.index(DEFAULT_STEP),
             self.on_step_changed)
         self._create_vfo_group()
         self._create_slider_group()
@@ -205,20 +205,20 @@ class MainWindow(QMainWindow):
         labelBW = QLabel('BW')
 
         self.sliderLine = QSlider(Qt.Orientation.Vertical)
-        self.sliderLine.setRange(-96, 0)
+        self.sliderLine.setRange(self.sdr.MinVolume, 0)
         self.sliderLine.setTickPosition(QSlider.TickPosition.TicksLeft)
-        self.sliderLine.setValue(-96)
+        self.sliderLine.setValue(self.sdr.MinVolume)
         self.sliderLine.valueChanged.connect(self.on_line_level_changed)
 
         self.sliderVol = QSlider(Qt.Orientation.Vertical)
-        self.sliderVol.setRange(-96, 0)
+        self.sliderVol.setRange(self.sdr.MinVolume, 0)
         self.sliderVol.setTickPosition(QSlider.TickPosition.TicksLeft)
-        self.sliderVol.setValue(-96)
+        self.sliderVol.setValue(self.sdr.MinVolume)
         self.sliderVol.valueChanged.connect(self.on_volume_changed)
 
         self.sliderBW = QSlider(Qt.Orientation.Vertical)
-        self.sliderBW.setRange(0, 33)
-        self.sliderBW.setValue(33)
+        self.sliderBW.setRange(0, len(self.Filters) - 1)
+        self.sliderBW.setValue(self.Filters.index(self.sdr.DefaultFilter))
         # Only send the filter (and the retune it triggers) on release, so a
         # fast drag doesn't queue up seconds of serial commands.
         self.sliderBW.setTracking(False)
@@ -291,8 +291,8 @@ class MainWindow(QMainWindow):
         self.radio.set_vfo_a(freq)
 
     def on_mute(self):
-        self.sliderLine.setValue(-96)
-        self.sliderVol.setValue(-96)
+        self.sliderLine.setValue(self.sdr.MinVolume)
+        self.sliderVol.setValue(self.sdr.MinVolume)
 
     def on_dial_changed(self, value):
         span = self.dial.maximum() - self.dial.minimum()

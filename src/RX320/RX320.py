@@ -19,15 +19,21 @@ class RX320():
     MaxFreq = data.MAXFREQ
 
     # Full-scale signal strength reading (measured on the radio)
-    SignalMax = 10000
+    SignalMax = data.SIGNAL_MAX
+    MinVolume = -data.ATTENUATION_RANGE_DB      # slider value for mute, in dB
+
+    DefaultMode = data.DEFAULT_MODE
+    DefaultFilter = data.DEFAULT_FILTER
+    DefaultAGC = data.DEFAULT_AGC
+    DefaultFreq = data.DEFAULT_FREQ
 
     # Internal state of the radio
-    _Mode = 'AM'                # AM
-    _Filter = 8000              # 8kHz
-    _Freq = 0.5                 # 500kHz
-    _LineAttenuation = 63       # Mute
-    _SpeakerAttenuation = 63    # Mute
-    _AGC = 'Medium'             # 'Medium'
+    _Mode = DefaultMode
+    _Filter = DefaultFilter
+    _Freq = DefaultFreq
+    _LineAttenuation = data.ATTENUATION_MAX
+    _SpeakerAttenuation = data.ATTENUATION_MAX
+    _AGC = DefaultAGC
 
     def __init__(self):
         self.sdr = None
@@ -52,12 +58,10 @@ class RX320():
             self.sdr.CloseSerial()
 
     def SetAttenuation(self, Value, Target):
-        # Remap [0, -96] to [0, 63]
-        # Attenuation is from 0 to 63 -> 0 to 96dB (1.5dB/step)
-        # Magic number is 63/-96 = -0.65625
+        # slider dB [-96, 0] -> attenuation code [63, 0]
         if Target not in self._Target:
             raise IndexError()  # Invalid command
-        attenuation = int(-0.65625 * Value)
+        attenuation = int(-Value * data.ATTENUATION_MAX / data.ATTENUATION_RANGE_DB)
         if Target in ('Line', 'Both'):
             self._LineAttenuation = attenuation
         if Target in ('Speaker', 'Both'):

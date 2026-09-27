@@ -36,6 +36,11 @@ class FakeRadio:
     MinFreq = RX320.MinFreq
     MaxFreq = RX320.MaxFreq
     SignalMax = RX320.SignalMax
+    MinVolume = RX320.MinVolume
+    DefaultMode = RX320.DefaultMode
+    DefaultFilter = RX320.DefaultFilter
+    DefaultAGC = RX320.DefaultAGC
+    DefaultFreq = RX320.DefaultFreq
 
     def __init__(self):
         self.calls = []
