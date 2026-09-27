@@ -6,7 +6,8 @@ import tempfile
 
 # Must happen before Qt starts or any QSettings is created:
 # - run headless unless a platform is explicitly requested
-# - keep settings out of the real ~/.config (Qt reads this path once)
+# - a throwaway folder for settings (see clean_settings). XDG_CONFIG_HOME
+#   is an extra guard on Linux only; Qt reads it once.
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 TEST_CONFIG_DIR = tempfile.mkdtemp(prefix='rx320-test-config-')
 os.environ['XDG_CONFIG_HOME'] = TEST_CONFIG_DIR
@@ -17,7 +18,12 @@ from PyQt6.QtCore import QSettings
 
 from fakes import FakeRadio, PtyRadio
 from gui import main_window
-from gui.main_window import SETTINGS_SCOPE, MainWindow
+from gui.main_window import MainWindow
+
+# The app's real settings (native storage: registry on Windows, plist on
+# macOS, a .conf file on Linux), kept for the test that checks it
+REAL_OPEN_SETTINGS = getattr(main_window, 'open_settings', None)
+TEST_SETTINGS_FILE = os.path.join(TEST_CONFIG_DIR, 'RX320.ini')
 
 FAKE_PORTS = ['/dev/fake0', '/dev/fake1', '/dev/fake2']
 FAKE_PORT_DESCRIPTIONS = {'/dev/fake0': 'FT232R USB UART (FTDI), serial AB0N3GLA',
@@ -25,12 +31,19 @@ FAKE_PORT_DESCRIPTIONS = {'/dev/fake0': 'FT232R USB UART (FTDI), serial AB0N3GLA
                           '/dev/fake2': None}  # e.g. a built-in port
 
 
+def _test_settings():
+    return QSettings(TEST_SETTINGS_FILE, QSettings.Format.IniFormat)
+
+
 @pytest.fixture(autouse=True)
-def clean_settings():
-    """Every test starts with no saved settings."""
-    QSettings(*SETTINGS_SCOPE).clear()
+def clean_settings(monkeypatch):
+    """Every test uses a temporary INI file instead of the real settings, on
+    every OS, and starts with it empty. Windows are closed (and save their
+    settings) before this is undone, so nothing reaches the real settings."""
+    monkeypatch.setattr(main_window, 'open_settings', _test_settings)
+    _test_settings().clear()
     yield
-    QSettings(*SETTINGS_SCOPE).clear()
+    _test_settings().clear()
 
 
 @pytest.fixture(autouse=True)

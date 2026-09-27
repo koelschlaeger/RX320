@@ -17,6 +17,10 @@ from .serial_utils import get_serial_ports
 # on Linux
 SETTINGS_SCOPE = ('RX320', 'RX320')
 
+def open_settings():
+    # Native storage: a .conf file on Linux, the registry on Windows,
+    # a plist on macOS. Tests replace this with a temporary INI file.
+    return QSettings(*SETTINGS_SCOPE)
 
 def _format_hz(hz):
     # 10.0 -> '10 Hz', 5000.0 -> '5 kHz'
@@ -402,7 +406,7 @@ class MainWindow(QMainWindow):
     def _save_settings(self):
         # Choices are stored by value (e.g. 'USB', 3000 Hz), not by position.
         # Volume is deliberately not saved: the app always starts muted.
-        settings = QSettings(*SETTINGS_SCOPE)
+        settings = open_settings()
         settings.setValue('window/geometry', self.saveGeometry())
         settings.setValue('serial/port', self.comboBoxSerialPort.currentText())
         settings.setValue('vfo/a', self.radio.vfo_a)
@@ -417,7 +421,7 @@ class MainWindow(QMainWindow):
         # Runs before any radio is connected, so it only updates widgets
         # (with signals blocked); _sync_radio_to_gui() sends them on connect.
         # Missing or unrecognised values leave the defaults in place.
-        settings = QSettings(*SETTINGS_SCOPE)
+        settings = open_settings()
 
         def read(key, value_type, default=None):
             # Missing keys and unconvertible values (e.g. a hand-edited file)

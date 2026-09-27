@@ -1,16 +1,25 @@
 import os
+from pathlib import Path
 
 import pytest
 from PyQt6.QtCore import QSettings
 
-from conftest import FAKE_PORTS, TEST_CONFIG_DIR
+from conftest import FAKE_PORTS, REAL_OPEN_SETTINGS, TEST_CONFIG_DIR
 from fakes import FakeRadio
+from gui import main_window
 from gui.main_window import SETTINGS_SCOPE
 
 
 def test_settings_stay_out_of_real_config():
-    path = QSettings(*SETTINGS_SCOPE).fileName()
-    assert path.startswith(TEST_CONFIG_DIR)
+    path = Path(main_window.open_settings().fileName()).resolve()
+    assert path.is_relative_to(Path(TEST_CONFIG_DIR).resolve())
+
+
+def test_app_uses_native_settings():
+    # Only the tests swap in an INI file; the app keeps the OS's own storage
+    settings = REAL_OPEN_SETTINGS()
+    assert settings.format() == QSettings.Format.NativeFormat
+    assert (settings.organizationName(), settings.applicationName()) == SETTINGS_SCOPE
 
 
 def test_defaults_without_saved_settings(window):
@@ -80,7 +89,7 @@ def test_restoring_sends_nothing_until_connect(saved_session, make_window):
 
 
 def test_corrupted_settings_fall_back_to_defaults(make_window):
-    path = QSettings(*SETTINGS_SCOPE).fileName()
+    path = main_window.open_settings().fileName()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as f:
         f.write('[audio]\nlink=maybe\n'
