@@ -2,6 +2,7 @@
 serial port object, and a pseudo-terminal that acts as the physical radio."""
 
 import os
+import select
 import threading
 import time
 
@@ -150,11 +151,18 @@ class PtyRadio:
         self.signal = 90
         self.received = []
         self._buffer = bytearray()
+        self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def _run(self):
-        while True:
+        # Wait with a timeout instead of blocking in read(): on macOS,
+        # closing a terminal that another thread is reading waits for that
+        # read to return, so unplug() must stop this loop before closing.
+        while not self._stop.is_set():
+            ready, _, _ = select.select([self._master], [], [], 0.05)
+            if not ready:
+                continue
             try:
                 data = os.read(self._master, 256)
             except OSError:
@@ -185,6 +193,8 @@ class PtyRadio:
 
     def unplug(self):
         """Close the radio end; the app's next read or write fails."""
+        self._stop.set()
+        self._thread.join()
         for fd in (self._master, self._slave):
             try:
                 os.close(fd)
