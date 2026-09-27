@@ -3,7 +3,7 @@
 from serial.tools import list_ports
 
 
-def getSerialPorts():
+def get_serial_ports():
     # Lists serial port names available on the system, USB adapters first
     # (the likeliest to be the radio), then by name.
     # Uses the OS device list rather than opening each port, so probing

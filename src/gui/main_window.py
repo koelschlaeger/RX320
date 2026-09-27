@@ -12,7 +12,7 @@ from RX320.RX320 import RX320
 
 from .constants import IMG_DIR, TuningSteps
 from .radio_controller import RadioController
-from .serial_utils import getSerialPorts
+from .serial_utils import get_serial_ports
 
 
 def _format_hz(hz):
@@ -42,18 +42,18 @@ class MainWindow(QDialog):
         self.connectionTimer.timeout.connect(self._check_connection)
 
         self.modeGroupBox, self.modeButtonGroup = self._make_radio_group(
-            'Mode', self.Modes, 0, self.modeButtonGroup_ButtonClicked)
+            'Mode', self.Modes, 0, self.on_mode_changed)
         self.agcGroupBox, self.agcButtonGroup = self._make_radio_group(
-            'AGC', ('Slow', 'Med', 'Fast'), 1, self.agcButtonGroup_ButtonClicked)
+            'AGC', ('Slow', 'Med', 'Fast'), 1, self.on_agc_changed)
         self.stepGroupBox, self.stepButtonGroup = self._make_radio_group(
             'Step', [_format_hz(hz) for hz in TuningSteps], 3,
-            self.stepButtonGroup_ButtonClicked)
-        self.createVFOGroupBox()
-        self.createSliderGroupBox()
-        self.createStatusGroupBox()
+            self.on_step_changed)
+        self._create_vfo_group()
+        self._create_slider_group()
+        self._create_status_group()
 
-        self.createTopLayout()
-        self.createBottomLayout()
+        self._create_top_layout()
+        self._create_bottom_layout()
 
         self._controls = [self.modeGroupBox, self.agcGroupBox, self.stepGroupBox,
                            self.vfoGroupBox, self.sliderGroupBox,
@@ -72,7 +72,7 @@ class MainWindow(QDialog):
 
         self.set_controls_enabled(False)
 
-        self.stepButtonGroup_ButtonClicked(self.stepButtonGroup.checkedId())
+        self.on_step_changed(self.stepButtonGroup.checkedId())
 
     def _make_button(self, text='', icon=None, slot=None) -> QPushButton:
         btn = QPushButton(text)
@@ -109,13 +109,13 @@ class MainWindow(QDialog):
 
     def _refresh_serial_ports(self):
         current = self.comboBoxSerialPort.currentText()
-        ports = getSerialPorts()
+        ports = get_serial_ports()
         self.comboBoxSerialPort.clear()
         self.comboBoxSerialPort.addItems(ports)
         if current in ports:
             self.comboBoxSerialPort.setCurrentText(current)
 
-    def createTopLayout(self):
+    def _create_top_layout(self):
         labelLogo = QLabel()
         labelLogo.setPixmap(QPixmap(str(IMG_DIR / 'ttrx320.xpm')))
 
@@ -124,7 +124,7 @@ class MainWindow(QDialog):
         self.topLayout.addWidget(self.statusGroupBox)
         self.topLayout.addStretch(1)
 
-    def createBottomLayout(self):
+    def _create_bottom_layout(self):
         self.bottomLayout = QHBoxLayout()
         self.comboBoxSerialPort = QComboBox()
         self.comboBoxSerialPort.setMinimumWidth(120)
@@ -133,7 +133,7 @@ class MainWindow(QDialog):
         pushButtonQuit = self._make_button('Quit', slot=self._quit)
         pushButtonConnect = self._make_button('Connect', slot=self._connect)
         pushButtonDisconnect = self._make_button('Disconnect', slot=self._disconnect)
-        self.pushButtonMute = self._make_button('Mute', slot=self.pushButtonMute_Clicked)
+        self.pushButtonMute = self._make_button('Mute', slot=self.on_mute)
         pushButtonRefreshSerialPorts = self._make_button('Refresh', slot=self._refresh_serial_ports)
 
         self.bottomLayout.addWidget(pushButtonQuit)
@@ -143,23 +143,23 @@ class MainWindow(QDialog):
         self.bottomLayout.addWidget(pushButtonDisconnect)
         self.bottomLayout.addWidget(self.pushButtonMute)
 
-    def createVFOGroupBox(self):
+    def _create_vfo_group(self):
         self.vfoGroupBox = QGroupBox()
 
         pushButtonStepUpUp = self._make_button(icon=str(IMG_DIR / 'up2.xpm'),
-                                               slot=lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * 10.0))
+                                               slot=lambda: self.on_step_vfo(self.tuningStepMHz * 10.0))
 
         pushButtonStepUp = self._make_button(icon=str(IMG_DIR / 'up.xpm'),
-                                             slot=lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * 1.0))
+                                             slot=lambda: self.on_step_vfo(self.tuningStepMHz * 1.0))
 
         pushButtonStepDownDown = self._make_button(icon=str(IMG_DIR / 'down2.xpm'),
-                                                   slot=lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * -10.0))
+                                                   slot=lambda: self.on_step_vfo(self.tuningStepMHz * -10.0))
 
         pushButtonStepDown = self._make_button(icon=str(IMG_DIR / 'down.xpm'),
-                                               slot=lambda: self.pushButtonStep_ButtonClicked(self.tuningStepMHz * -1.0))
+                                               slot=lambda: self.on_step_vfo(self.tuningStepMHz * -1.0))
 
-        pushButtonVFOSwap = self._make_button('A / B', slot=self.pushButtonVFOSwap_ButtonClicked)
-        pushButtonVFOStore = self._make_button('A -> B', slot=self.pushButtonVFOStore_ButtonClicked)
+        pushButtonVFOSwap = self._make_button('A / B', slot=self.on_vfo_swap)
+        pushButtonVFOStore = self._make_button('A -> B', slot=self.on_vfo_store)
 
         self.dial = QDial()
         self.dial.setValue(0)
@@ -167,7 +167,7 @@ class MainWindow(QDialog):
         self.dial.setMaximum(100)
         self.dial.setNotchesVisible(True)
         self.dial.setWrapping(True)
-        self.dial.valueChanged.connect(self.dial_ValueChanged)
+        self.dial.valueChanged.connect(self.on_dial_changed)
 
         layout = QGridLayout()
         layout.addWidget(pushButtonStepUpUp, 0, 0)
@@ -179,7 +179,7 @@ class MainWindow(QDialog):
         layout.addWidget(pushButtonVFOSwap, 4, 2, 1, 2)
         self.vfoGroupBox.setLayout(layout)
 
-    def createSliderGroupBox(self):
+    def _create_slider_group(self):
         self.sliderGroupBox = QGroupBox()
 
         labelLine = QLabel('Line')
@@ -191,13 +191,13 @@ class MainWindow(QDialog):
         self.sliderLine.setRange(-96, 0)
         self.sliderLine.setTickPosition(QSlider.TickPosition.TicksLeft)
         self.sliderLine.setValue(-96)
-        self.sliderLine.valueChanged.connect(self.sliderLine_ValueChange)
+        self.sliderLine.valueChanged.connect(self.on_line_level_changed)
 
         self.sliderVol = QSlider(Qt.Orientation.Vertical)
         self.sliderVol.setRange(-96, 0)
         self.sliderVol.setTickPosition(QSlider.TickPosition.TicksLeft)
         self.sliderVol.setValue(-96)
-        self.sliderVol.valueChanged.connect(self.sliderVol_ValueChange)
+        self.sliderVol.valueChanged.connect(self.on_volume_changed)
 
         self.sliderBW = QSlider(Qt.Orientation.Vertical)
         self.sliderBW.setRange(0, 33)
@@ -205,15 +205,15 @@ class MainWindow(QDialog):
         # Only send the filter (and the retune it triggers) on release, so a
         # fast drag doesn't queue up seconds of serial commands.
         self.sliderBW.setTracking(False)
-        self.sliderBW.valueChanged.connect(self.sliderBW_ValueChange)
-        self.sliderBW.sliderMoved.connect(self.sliderBW_Moved)
+        self.sliderBW.valueChanged.connect(self.on_bandwidth_changed)
+        self.sliderBW.sliderMoved.connect(self.on_bandwidth_moved)
 
         self.sliderPBT = QSlider(Qt.Orientation.Vertical)
         self.sliderPBT.setRange(0, 300)
         self.sliderPBT.setValue(0)
 
         self.checkBoxLink = QCheckBox("&Link")
-        self.checkBoxLink.toggled.connect(self.checkBoxLink_Toggled)
+        self.checkBoxLink.toggled.connect(self.on_link_toggled)
 
         layout = QGridLayout()
         layout.addWidget(labelLine, 0, 0)
@@ -228,7 +228,7 @@ class MainWindow(QDialog):
 
         self.sliderGroupBox.setLayout(layout)
 
-    def createStatusGroupBox(self):
+    def _create_status_group(self):
         self.statusGroupBox = QGroupBox()
 
         labelMode = QLabel('Mode: ')
@@ -248,7 +248,7 @@ class MainWindow(QDialog):
         self.spinBoxVFOB.setDisabled(True)
 
         self._show_vfo()
-        self.spinBoxVFOA.valueChanged.connect(self.spinBoxVFOA_ValueChanged)
+        self.spinBoxVFOA.valueChanged.connect(self.on_vfo_a_changed)
 
         self.labelMode_Act = QLabel()
         self.labelMode_Act.setText(self.Modes[self.modeButtonGroup.checkedId()])
@@ -278,14 +278,14 @@ class MainWindow(QDialog):
             self.spinBoxVFOA.setValue(self.radio.vfo_a)
         self.spinBoxVFOB.setValue(self.radio.vfo_b)
 
-    def spinBoxVFOA_ValueChanged(self, freq):
+    def on_vfo_a_changed(self, freq):
         self.radio.set_vfo_a(freq)
 
-    def pushButtonMute_Clicked(self):
+    def on_mute(self):
         self.sliderLine.setValue(-96)
         self.sliderVol.setValue(-96)
 
-    def dial_ValueChanged(self, value):
+    def on_dial_changed(self, value):
         span = self.dial.maximum() - self.dial.minimum()
         delta = value - self.dialStart
         if delta > span / 2:
@@ -298,52 +298,52 @@ class MainWindow(QDialog):
             self.radio.step_vfo_a(delta * self.tuningStepMHz)
             self._show_vfo()
 
-    def sliderLine_ValueChange(self, value):
+    def on_line_level_changed(self, value):
         if self.checkBoxLink.isChecked():
             self.sliderVol.setValue(value)
         self.sdr.SetAttenuation(value, 'Line')
 
-    def sliderVol_ValueChange(self, value):
+    def on_volume_changed(self, value):
         if self.checkBoxLink.isChecked():
             self.sliderLine.setValue(value)
         self.sdr.SetAttenuation(value, 'Speaker')
 
-    def sliderBW_ValueChange(self, filter_id):
+    def on_bandwidth_changed(self, filter_id):
         self.sdr.SetFilter(self.Filters[filter_id])
         self.labelBW_Act.setText(str(self.Filters[filter_id]))
 
-    def sliderBW_Moved(self, position):
+    def on_bandwidth_moved(self, position):
         # Keep the BW label live while dragging; the radio updates on release
         self.labelBW_Act.setText(str(self.Filters[position]))
 
-    def checkBoxLink_Toggled(self, checked):
+    def on_link_toggled(self, checked):
         if checked:
             min_value = min(self.sliderVol.value(), self.sliderLine.value())
             self.sliderVol.setValue(min_value)
             self.sliderLine.setValue(min_value)
 
-    def modeButtonGroup_ButtonClicked(self, mode_id):
+    def on_mode_changed(self, mode_id):
         self.sdr.SetMode(self.Modes[mode_id])
         self.labelMode_Act.setText(self.Modes[mode_id])
 
-    def agcButtonGroup_ButtonClicked(self, agc_id):
+    def on_agc_changed(self, agc_id):
         self.sdr.SetAGC(self.AGCModes[agc_id])
         self.labelAGC_Act.setText(self.AGCModes[agc_id])
 
-    def stepButtonGroup_ButtonClicked(self, step_id):
+    def on_step_changed(self, step_id):
         self.tuningStepMHz = TuningSteps[step_id] / 1000000.0
         # The VFO A spin box arrows and mouse wheel follow the tuning step
         self.spinBoxVFOA.setSingleStep(self.tuningStepMHz)
 
-    def pushButtonStep_ButtonClicked(self, step):
+    def on_step_vfo(self, step):
         self.radio.step_vfo_a(step)
         self._show_vfo()
 
-    def pushButtonVFOStore_ButtonClicked(self):
+    def on_vfo_store(self):
         self.radio.store_a_to_b()
         self._show_vfo()
 
-    def pushButtonVFOSwap_ButtonClicked(self):
+    def on_vfo_swap(self):
         self.radio.swap_vfo()
         self._show_vfo()
 
