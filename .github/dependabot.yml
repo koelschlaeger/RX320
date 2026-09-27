@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # GitHub Actions used by the workflows (understands the SHA pin + version comment)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+
+  # Python dependencies in pyproject.toml / uv.lock
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "monthly"
