@@ -1,4 +1,5 @@
 # RX320
+![Tests](https://github.com/koelschlaeger/RX320/actions/workflows/tests.yml/badge.svg)
 
 A desktop control panel for the Ten-Tec RX-320 PC-controlled shortwave
 receiver, written in Python with PyQt6.
