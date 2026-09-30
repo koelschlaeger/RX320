@@ -10,3 +10,10 @@ IMG_DIR = Path(__file__).resolve().parent.parent / 'img'
 TuningSteps = (10.0, 100.0, 1000.0, 5000.0, 10000.0)
 
 DEFAULT_STEP = 5000.0   # Hz
+
+# Scan window defaults: the 40 m band, where there is usually something to see
+DEFAULT_SCAN_START = 7.0        # MHz
+DEFAULT_SCAN_STOP = 7.3         # MHz
+DEFAULT_SCAN_STEP = 5.0         # kHz
+DEFAULT_SCAN_SAMPLES = 5        # readings averaged per frequency
+DEFAULT_SCAN_SETTLE = 100       # ms to wait after tuning before measuring

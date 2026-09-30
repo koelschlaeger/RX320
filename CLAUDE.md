@@ -50,6 +50,12 @@ the app does and how users run it; this file covers how to work on it.
   (whole Hz, both ends, clamped), `Scanner` driven by a GUI timer calling
   `poll()` (one measurement outstanding at a time), time estimate, and
   `nearest_point()` for click-to-tune.
+- `src/gui/scan_window.py` — separate scan window: inputs with a time
+  estimate, Start/Stop, live pyqtgraph plot (unreadable steps are gaps),
+  click-to-tune after a scan. It tunes the radio itself while scanning and
+  talks to the main window only through signals: `scanStarted` (before the
+  first tune), `scanFinished` and `tuneRequested(freq)`. Scan defaults are in
+  `gui/constants.py`.
 
 ## Conventions
 
