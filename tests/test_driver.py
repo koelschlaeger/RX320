@@ -260,7 +260,10 @@ def test_measurement_samples_right_after_the_tune(running):
 def test_measurement_waits_the_settle_time(running):
     start = time.monotonic()
     running.measure(1, settle=0.3).result(timeout=3)
-    assert time.monotonic() - start >= 0.3
+    # Allow for the clock: on Windows, time.monotonic() and thread waits
+    # follow the ~15.6 ms system tick, so 0.3 s can measure a hair under.
+    # Without the settle wait this takes a few ms, far below the bound.
+    assert time.monotonic() - start >= 0.25
 
 
 def test_measurement_updates_the_meter_reading(running):

@@ -90,6 +90,9 @@ Ubuntu, Windows and macOS. Things learned the hard way:
   by commit SHA; check a tag exists before referencing one.
 - Windows' minimum window width (~808 px) is larger than Linux's (~673 px):
   don't assert fixed window widths.
+- On Windows, `time.monotonic()` and thread waits follow the ~15.6 ms system
+  tick, so a 0.3 s wait can measure a hair under 0.3 s: give lower bounds on
+  elapsed time some slack.
 - On macOS, closing a pseudo-terminal blocks while another thread reads it;
   `PtyRadio` therefore stops its reader thread before closing.
 - Hang diagnostics: pytest `faulthandler_timeout = 60` dumps all thread
