@@ -36,6 +36,9 @@ the app does and how users run it; this file covers how to work on it.
   so volume stays last on connect), and `C` (both volumes) supersedes waiting
   `A`/`V`. `open_serial()` on a running driver is a no-op.
   `measure()` queues a signal measurement (settle, then back-to-back `X` polls) and returns a `Future`; commands are never merged across a waiting measurement, and closing or losing the port cancels pending ones.
+  `close_serial()` ends measurements at once but still sends the commands
+  already queued (for up to `DRAIN_TIMEOUT`), so settings restored just
+  before a disconnect reach the radio; after a lost port it doesn't wait.
 - `src/RX320/RX320.py` — the interface the GUI uses (`connect`, `set_mode`,
   `set_filter`, …; `connected` and `signal_strength` are live properties).
   Mode and filter changes retune, because the tune command's offsets depend on

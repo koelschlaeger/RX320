@@ -156,11 +156,56 @@ def test_close_stops_worker_and_port(running):
     assert not running.is_open()
 
 
+def test_close_sends_commands_still_queued(running):
+    # e.g. the main window restoring AGC and frequency after a scan that the
+    # disconnect itself stopped
+    running.set_agc('Medium')
+    running.set_vfo(14.2, 'AM', 8000)
+    running.close_serial()
+    assert running.com.commands()[-2:] == [b'G2', tune_bytes(14.2, 'AM', 8000)]
+
+
+def test_close_during_a_measurement_still_sends_queued_commands(running):
+    # Closing ends the measurement, but that isn't a lost port: the worker
+    # must go on to send what was queued behind it
+    settling = running.measure(1, settle=5)
+    running.set_agc('Medium')
+    wait_until(settling.running)
+    running.close_serial()
+    assert isinstance(settling.exception(timeout=1), ConnectionError)
+    assert running.com.commands()[-1] == b'G2'
+
+
+def test_close_gives_up_sending_after_the_timeout(running):
+    wait_until(lambda: len(running.com.commands()) >= 3)  # power-up sent
+    real_write = running.com.write
+    running.com.write = lambda data: (time.sleep(0.2), real_write(data))[1]
+    for level in range(20):
+        running.set_attenuation(level, 'Speaker')
+        running.measure(1)  # keeps the volume commands from merging
+    start = time.monotonic()
+    running.close_serial(drain_timeout=0.3)
+    assert time.monotonic() - start < 1.5
+    assert len([c for c in running.com.commands() if c[:1] == b'V']) < 20
+    assert not running.queue_thread.is_alive()
+
+
 def test_lost_port_stops_worker_cleanly(running):
     running.com.fail()
     wait_until(lambda: not running.queue_thread.is_alive())
     assert not running.is_open()
     running.close_serial()  # still safe afterwards
+
+
+def test_close_after_lost_port_does_not_wait_to_send(running):
+    # Nothing can be sent once the port is gone: close must not sit out the
+    # drain timeout waiting for a worker that has stopped
+    running.com.fail()
+    wait_until(lambda: not running.queue_thread.is_alive())
+    running.set_agc('Fast')  # queued, but will never be sent
+    start = time.monotonic()
+    running.close_serial()
+    assert time.monotonic() - start < 0.5
 
 
 def test_open_twice_keeps_one_worker(running):

@@ -5,6 +5,7 @@ Created on Sun May  1 14:58:07 2022
 @author: KOelschlaeger
 """
 import struct
+import time
 from concurrent.futures import Future
 from queue import Empty, Queue
 from threading import Event, Thread
@@ -18,6 +19,7 @@ from RX320 import RX320_Data as data
 
 POLL_INTERVAL = 0.2  # Seconds of idle time before polling signal strength
 REPLY_LEN = 4        # Reply to 'X': b'X' + 16-bit value + b'\r'
+DRAIN_TIMEOUT = 1.0  # Seconds close_serial() may spend sending queued commands
 
 class RX320_Driver():
     # Lookup by name, e.g. MODES['USB'].command -> b'M1'
@@ -39,6 +41,7 @@ class RX320_Driver():
         self.msg_queue = Queue()
         self.queue_thread = None
         self._stop = Event()
+        self._closing = Event()     # close_serial() running: end measurements
         self.rsi = 0
 
     def open_serial(self):
@@ -53,6 +56,7 @@ class RX320_Driver():
         self._power_up()
 
         self._stop.clear()
+        self._closing.clear()
         # Daemon so a missed close_serial() can't keep the process alive
         self.queue_thread = Thread(target=self._service_queue, daemon=True)
         self.queue_thread.start()
@@ -62,10 +66,17 @@ class RX320_Driver():
         # True while the port is open and the worker is still servicing it
         return self.com.is_open and not self._stop.is_set()
 
-    def close_serial(self):
-        # Drop pending commands, let the worker finish, then close the port
-        self._stop.set()
+    def close_serial(self, drain_timeout=DRAIN_TIMEOUT):
+        # End measurements at once, but send the commands still queued (e.g.
+        # settings restored after a scan) for up to drain_timeout seconds,
+        # then stop the worker and close the port
+        self._closing.set()
         self._cancel_waiting_measurements()
+        deadline = time.monotonic() + drain_timeout
+        while (not self.msg_queue.empty() and time.monotonic() < deadline
+               and self.queue_thread is not None and self.queue_thread.is_alive()):
+            time.sleep(0.01)
+        self._stop.set()  # the worker finishes the command it's sending
         with self.msg_queue.mutex:
             self.msg_queue.queue.clear()
         if self.queue_thread:
@@ -159,8 +170,8 @@ class RX320_Driver():
             raise ValueError('samples must be at least 1')
         future = Future()
         self.msg_queue.put(((samples, settle, future), 'MEASURE'))
-        if self._stop.is_set():
-            # Closed or port lost: no worker will ever run it
+        if self._stop.is_set() or self._closing.is_set():
+            # Closing or port lost: it would never run
             self._cancel_waiting_measurements()
         return future
 
@@ -192,6 +203,8 @@ class RX320_Driver():
             try:
                 (msg, mode) = self.msg_queue.get(timeout=POLL_INTERVAL)
             except Empty:
+                if self._stop.is_set():
+                    break  # closing: don't start a poll now
                 # Nothing to send, so poll signal strength
                 (msg, mode) = (b'X', 'RW')
 
@@ -212,21 +225,26 @@ class RX320_Driver():
     def _measure(self, samples, settle, future):
         if not future.set_running_or_notify_cancel():
             return  # cancelled while it waited in the queue
+        # Closing ends a measurement early. That fails the measurement but
+        # isn't a port error: the worker carries on sending queued commands.
+        closed = ConnectionError('port closed during measurement')
+        if self._closing.wait(settle):  # returns early if the port closes
+            future.set_exception(closed)
+            return
+        readings = []
         try:
-            if self._stop.wait(settle):  # returns early if the port closes
-                raise ConnectionError('port closed during measurement')
-            readings = []
             for _ in range(samples):
-                if self._stop.is_set():
-                    raise ConnectionError('port closed during measurement')
+                if self._closing.is_set():
+                    future.set_exception(closed)
+                    return
                 value = self._command_read_write(b'X')
                 if value is not None:
                     readings.append(value)
                     self.rsi = value
-            future.set_result(readings)
         except (OSError, serial.SerialException) as error:
             future.set_exception(error)
-            raise  # let the worker stop as for any lost port
+            raise  # a real port error: let the worker stop
+        future.set_result(readings)
 
     def _cancel_waiting_measurements(self):
         # Collect under the queue lock, cancel outside it: cancel() runs any
