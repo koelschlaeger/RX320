@@ -46,6 +46,10 @@ the app does and how users run it; this file covers how to work on it.
   and updates the signal meter. Settings persist via `open_settings()`
   (native QSettings storage per OS); volume is never restored.
 - `src/gui/radio_controller.py` — VFO A/B state, no Qt.
+- `src/gui/scanner.py` — signal-strength scan logic, no Qt: frequency plan
+  (whole Hz, both ends, clamped), `Scanner` driven by a GUI timer calling
+  `poll()` (one measurement outstanding at a time), time estimate, and
+  `nearest_point()` for click-to-tune.
 
 ## Conventions
 

@@ -5,6 +5,7 @@ import os
 import select
 import threading
 import time
+from concurrent.futures import Future
 
 import serial
 
@@ -49,6 +50,13 @@ class FakeRadio:
         self.signal = 0
         self.connect_result = True   # False: port opens but reports failure
         self.connect_error = None    # exception for connect() to raise
+        self.freq = self.DEFAULT_FREQ
+        # Signal measurements: readings come from signal_at(tuned frequency).
+        # With auto_measure False they stay pending in .measurements until
+        # the test resolves them.
+        self.signal_at = lambda freq: self.signal
+        self.auto_measure = True
+        self.measurements = []
 
     @property
     def signal_strength(self):
@@ -75,6 +83,17 @@ class FakeRadio:
 
     def set_vfo(self, freq):
         self.calls.append(('set_vfo', round(freq, 6)))
+        self.freq = freq
+
+    def measure_signal(self, samples, settle=0.0):
+        self.calls.append(('measure_signal', samples, settle))
+        if not self.connected:
+            raise ConnectionError('not connected')
+        future = Future()
+        self.measurements.append(future)
+        if self.auto_measure:
+            future.set_result([self.signal_at(self.freq)] * samples)
+        return future
 
     def set_attenuation(self, value, target):
         self.calls.append(('set_attenuation', value, target))
