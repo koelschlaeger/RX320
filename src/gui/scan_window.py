@@ -13,6 +13,7 @@ from .scanner import MIN_STEP_HZ, Scanner
 from .settings_utils import read_setting
 
 POLL_INTERVAL_MS = 20
+HZ_PER_MHZ = 1_000_000
 
 
 def format_duration(seconds):
@@ -25,6 +26,13 @@ def format_duration(seconds):
         return f'{minutes} min {seconds} s'
     hours, minutes = divmod(minutes, 60)
     return f'{hours} h {minutes} min'
+
+
+def format_frequency(mhz):
+    # 0.75 -> '750.000 kHz', 7.1 -> '7.100000 MHz' (1 Hz resolution)
+    if mhz < 1:
+        return f'{mhz * 1000:.3f} kHz'
+    return f'{mhz:.6f} MHz'
 
 
 class ScanWindow(QWidget):
@@ -151,7 +159,9 @@ class ScanWindow(QWidget):
 
     def _create_plot(self):
         self.plot = pg.PlotWidget()
-        self.plot.setLabel('bottom', 'Frequency', units='MHz')
+        # The plot works in Hz, not MHz, so the axis's automatic SI prefix
+        # reads kHz below 1 MHz (with MHz data it would show "mMHz")
+        self.plot.setLabel('bottom', 'Frequency', units='Hz')
         self.plot.setLabel('left', 'Signal')
         self.plot.showGrid(x=True, y=True, alpha=0.3)
         # Unreadable steps are NaN: leave a gap rather than a line through them
@@ -161,7 +171,7 @@ class ScanWindow(QWidget):
         self.marker = pg.InfiniteLine(
             angle=90, movable=False,
             pen=pg.mkPen('#ffb000', width=2, style=Qt.PenStyle.DashLine),
-            label='{value:.6f} MHz',
+            label='',  # text set in tune_to(), in kHz or MHz
             labelOpts={'position': 0.97, 'color': '#ffb000', 'anchors': [(0, 0), (0, 0)]})
         self.marker.hide()
         self.plot.addItem(self.marker)
@@ -208,7 +218,8 @@ class ScanWindow(QWidget):
         self._xs, self._ys = [], []
         self.curve.setData([], [])
         self.marker.hide()
-        self.plot.setXRange(self.scanner.frequencies[0], self.scanner.frequencies[-1])
+        self.plot.setXRange(self.scanner.frequencies[0] * HZ_PER_MHZ,
+                            self.scanner.frequencies[-1] * HZ_PER_MHZ)
         self.progressBar.setRange(0, len(self.scanner.frequencies))
         self.progressBar.setValue(0)
         self.labelStatus.setText('Scanning')
@@ -231,7 +242,7 @@ class ScanWindow(QWidget):
         # On the real radio at most one step is ready per tick; loop anyway,
         # so instant measurements (e.g. in tests) don't wait for the timer
         while (point := self.scanner.poll()) is not None:
-            self._xs.append(point.freq)
+            self._xs.append(point.freq * HZ_PER_MHZ)
             self._ys.append(math.nan if point.mean is None else point.mean)
         self.curve.setData(self._xs, self._ys)
         self.progressBar.setValue(self.scanner.progress[0])
@@ -261,18 +272,20 @@ class ScanWindow(QWidget):
         if point is None:
             return
         # Label on the side of the line with room: left of it in the right half
+        x = point.freq * HZ_PER_MHZ
         low, high = self.plot.plotItem.vb.viewRange()[0]
-        side = 1 if point.freq > (low + high) / 2 else 0
+        side = 1 if x > (low + high) / 2 else 0
         self.marker.label.anchors = [(side, 0), (side, 0)]
         self.marker.show()  # first: a hidden marker doesn't update its label
-        self.marker.setValue(point.freq)
+        self.marker.setValue(x)
+        self.marker.label.setFormat(format_frequency(point.freq))
         self.tuneRequested.emit(point.freq)
 
     def _on_plot_clicked(self, event):
         view = self.plot.plotItem.vb
         if not view.sceneBoundingRect().contains(event.scenePos()):
             return  # clicked on an axis or label, not the plot area
-        self.tune_to(view.mapSceneToView(event.scenePos()).x())
+        self.tune_to(view.mapSceneToView(event.scenePos()).x() / HZ_PER_MHZ)
 
     def closeEvent(self, event):
         self.stop_scan()

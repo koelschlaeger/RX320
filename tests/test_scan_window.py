@@ -8,7 +8,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QWidget
 
 from fakes import FakeRadio
-from gui.scan_window import ScanWindow, format_duration
+from gui.scan_window import ScanWindow, format_duration, format_frequency
 
 
 def peak_at_7_1(freq):
@@ -44,8 +44,10 @@ def events(scan):
 
 
 def plotted(scan):
+    """The plotted points, with frequencies converted back to MHz (the plot
+    works in Hz so its axis can show kHz or MHz)."""
     xs, ys = scan.curve.getData()
-    return ([] if xs is None else [round(x, 6) for x in xs],
+    return ([] if xs is None else [round(x / 1e6, 6) for x in xs],
             [] if ys is None else list(ys))
 
 
@@ -154,6 +156,24 @@ def test_format_duration(seconds, text):
     assert format_duration(seconds) == text
 
 
+@pytest.mark.parametrize('mhz, text', [
+    (0.75, '750.000 kHz'), (0.500001, '500.001 kHz'),
+    (1.0, '1.000000 MHz'), (7.1, '7.100000 MHz')])
+def test_format_frequency(mhz, text):
+    assert format_frequency(mhz) == text
+
+
+@pytest.mark.parametrize('start, stop, unit', [
+    (0.5, 0.9, 'kHz'),    # below 1 MHz: kHz, not "mMHz"
+    (7.0, 7.3, 'MHz')])
+def test_frequency_axis_units(qtbot, scan, start, stop, unit):
+    scan.spinStart.setValue(start)
+    scan.spinStop.setValue(stop)
+    run_to_end(qtbot, scan)
+    axis = scan.plot.getAxis('bottom')
+    qtbot.waitUntil(lambda: axis.labelUnitPrefix + axis.labelUnits == unit)
+
+
 # --- Running a scan ------------------------------------------------------------------
 
 def test_scan_plots_every_point_and_finds_the_peak(qtbot, scan, radio, events):
@@ -248,8 +268,16 @@ def test_tune_to_nearest_measured_point(qtbot, scan, events):
     run_to_end(qtbot, scan)
     scan.tune_to(7.1021)
     assert events[-1] == ('tune', 7.1)
-    assert scan.marker.isVisible() and scan.marker.value() == pytest.approx(7.1)
+    assert scan.marker.isVisible() and scan.marker.value() == pytest.approx(7.1e6)  # Hz
     assert scan.marker.label.toPlainText() == '7.100000 MHz'
+
+
+def test_marker_label_in_khz_below_1_mhz(qtbot, scan):
+    scan.spinStart.setValue(0.5)
+    scan.spinStop.setValue(0.9)
+    run_to_end(qtbot, scan)
+    scan.tune_to(0.75)
+    assert scan.marker.label.toPlainText() == '750.000 kHz'
 
 
 @pytest.mark.parametrize('freq', [7.0, 7.3])
@@ -282,7 +310,7 @@ def test_mouse_click_on_the_plot_tunes(qtbot, scan, events):
     # only after a repaint, so don't pick a y value from the data.)
     view = scan.plot.plotItem.vb
     y_low, y_high = view.viewRange()[1]
-    scene_pos = view.mapViewToScene(QPointF(7.1, (y_low + y_high) / 2))
+    scene_pos = view.mapViewToScene(QPointF(7.1e6, (y_low + y_high) / 2))  # Hz
     widget_pos = scan.plot.mapFromScene(scene_pos)
     QTest.mouseClick(scan.plot.viewport(), Qt.MouseButton.LeftButton, pos=widget_pos)
     qtbot.waitUntil(lambda: events[-1] == ('tune', 7.1))
