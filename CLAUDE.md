@@ -62,7 +62,9 @@ the app does and how users run it; this file covers how to work on it.
   click-to-tune after a scan. It tunes the radio itself while scanning and
   talks to the main window only through signals: `scanStarted` (before the
   first tune), `scanFinished` and `tuneRequested(freq)`. Scan defaults are in
-  `gui/constants.py`.
+  `gui/constants.py`; its inputs are saved under `scan/` in the main
+  window's settings, which hands it a `QSettings` to read and write
+  (corrupt values fall back via `gui/settings_utils.read_setting()`).
 
 ## Conventions
 

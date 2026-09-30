@@ -12,6 +12,7 @@ from .constants import IMG_DIR, TuningSteps, DEFAULT_STEP, SCAN_AGC
 from .radio_controller import RadioController
 from .scan_window import ScanWindow
 from .serial_utils import get_serial_ports
+from .settings_utils import read_setting
 
 
 # QSettings (organization, application): stored in ~/.config/RX320/RX320.conf
@@ -406,6 +407,7 @@ class MainWindow(QMainWindow):
             self.scanWindow.scanStarted.connect(self.on_scan_started)
             self.scanWindow.scanFinished.connect(self.on_scan_finished)
             self.scanWindow.tuneRequested.connect(self.on_scan_tune)
+            self.scanWindow.restore_settings(open_settings())
         self.scanWindow.set_connected(self.sdr.connected)
         self.scanWindow.show()
         self.scanWindow.raise_()
@@ -464,6 +466,9 @@ class MainWindow(QMainWindow):
         settings.setValue('radio/filter', self.Filters[self.sliderBW.value()])
         settings.setValue('tuning/step', TuningSteps[self.stepButtonGroup.checkedId()])
         settings.setValue('audio/link', self.checkBoxLink.isChecked())
+        if self.scanWindow is not None:
+            # Only if opened this session; otherwise the saved inputs stay
+            self.scanWindow.save_settings(settings)
 
     def _restore_settings(self):
         # Runs before any radio is connected, so it only updates widgets
@@ -472,14 +477,7 @@ class MainWindow(QMainWindow):
         settings = open_settings()
 
         def read(key, value_type, default=None):
-            # Missing keys and unconvertible values (e.g. a hand-edited file)
-            # both give the default instead of stopping the app from starting
-            if not settings.contains(key):
-                return default
-            try:
-                return settings.value(key, type=value_type)
-            except TypeError:
-                return default
+            return read_setting(settings, key, value_type, default)
 
         geometry = read('window/geometry', QByteArray)
         if geometry:

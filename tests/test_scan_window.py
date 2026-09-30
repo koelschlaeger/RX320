@@ -3,7 +3,7 @@
 import math
 
 import pytest
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPointF, QSettings, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QWidget
 
@@ -102,6 +102,50 @@ def test_stays_a_separate_window_with_a_parent(qtbot, radio):
     qtbot.addWidget(parent)
     window = ScanWindow(radio, parent)
     assert window.isWindow()
+
+
+# --- Remembering the inputs ------------------------------------------------------------
+
+@pytest.fixture
+def settings(tmp_path):
+    return QSettings(str(tmp_path / 'scan.ini'), QSettings.Format.IniFormat)
+
+
+def test_inputs_are_saved_and_restored(qtbot, scan, radio, settings):
+    scan.spinStart.setValue(9.4)
+    scan.spinStop.setValue(9.9)
+    scan.spinStep.setValue(2.5)
+    scan.spinSamples.setValue(8)
+    scan.spinSettle.setValue(250)
+    scan.save_settings(settings)
+
+    restored = ScanWindow(radio)
+    qtbot.addWidget(restored)
+    restored.restore_settings(settings)
+    assert restored.spinStart.value() == 9.4
+    assert restored.spinStop.value() == 9.9
+    assert restored.spinStep.value() == 2.5
+    assert restored.spinSamples.value() == 8
+    assert restored.spinSettle.value() == 250
+    assert restored.labelEstimate.text().startswith('201 steps')
+
+
+def test_nothing_saved_keeps_the_defaults(scan, settings):
+    scan.restore_settings(settings)
+    assert (scan.spinStart.value(), scan.spinStop.value()) == (7.0, 7.3)
+    assert scan.labelEstimate.text() == '61 steps, about 25 s'
+
+
+def test_corrupted_scan_settings_fall_back(scan, settings):
+    for key, value in [('scan/start', 'hello'), ('scan/stop', 'abc'),
+                       ('scan/step', ''), ('scan/samples', 999),
+                       ('scan/settle', -5)]:
+        settings.setValue(key, value)
+    scan.restore_settings(settings)  # must not raise
+    assert (scan.spinStart.value(), scan.spinStop.value()) == (7.0, 7.3)
+    assert scan.spinStep.value() == 5.0
+    assert scan.spinSamples.value() == 50   # clamped to the allowed range
+    assert scan.spinSettle.value() == 0
 
 
 @pytest.mark.parametrize('seconds, text', [

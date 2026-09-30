@@ -3,6 +3,7 @@ a scan, locking and restoring the main controls, click-to-tune."""
 
 import pytest
 
+from fakes import FakeRadio
 from gui.constants import SCAN_AGC
 from test_main_window import button
 
@@ -132,3 +133,35 @@ def test_closing_the_app_stops_the_scan(scan, radio):
     assert scan.scanner.state == 'stopped'
     assert not scan.isVisible()
     assert radio.calls[-3:] == [('set_agc', 'Slow'), ('set_vfo', 14.2), ('disconnect',)]
+
+
+def open_scan_window(make_window):
+    """A new session: a connected main window with its scan window open."""
+    main = make_window(FakeRadio())
+    main._connect()
+    button(main, 'Scan…').click()
+    return main, main.scanWindow
+
+
+def test_scan_inputs_remembered_between_sessions(make_window):
+    main, scan = open_scan_window(make_window)
+    scan.spinStart.setValue(9.4)
+    scan.spinStop.setValue(9.9)
+    scan.spinSamples.setValue(8)
+    main.close()
+
+    main, scan = open_scan_window(make_window)
+    assert (scan.spinStart.value(), scan.spinStop.value()) == (9.4, 9.9)
+    assert scan.spinSamples.value() == 8
+
+
+def test_scan_inputs_kept_when_window_not_opened(make_window):
+    main, scan = open_scan_window(make_window)
+    scan.spinStart.setValue(9.4)
+    main.close()
+
+    main = make_window(FakeRadio())  # a session without scanning
+    main.close()
+
+    main, scan = open_scan_window(make_window)
+    assert scan.spinStart.value() == 9.4

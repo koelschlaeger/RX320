@@ -10,6 +10,7 @@ import pyqtgraph as pg  # after PyQt6, so pyqtgraph uses the same binding
 from .constants import (DEFAULT_SCAN_SAMPLES, DEFAULT_SCAN_SETTLE,
         DEFAULT_SCAN_START, DEFAULT_SCAN_STEP, DEFAULT_SCAN_STOP)
 from .scanner import MIN_STEP_HZ, Scanner
+from .settings_utils import read_setting
 
 POLL_INTERVAL_MS = 20
 
@@ -119,6 +120,25 @@ class ScanWindow(QWidget):
         self.inputLayout.addLayout(settings)
         self.inputLayout.addWidget(self.labelEstimate, 1)
         self.inputLayout.addLayout(buttons)
+
+    # Saved inputs: (settings key, spin box attribute, value type). Stored in
+    # the units shown: MHz, kHz, a count and ms.
+    _SETTINGS = (('scan/start', 'spinStart', float),
+                 ('scan/stop', 'spinStop', float),
+                 ('scan/step', 'spinStep', float),
+                 ('scan/samples', 'spinSamples', int),
+                 ('scan/settle', 'spinSettle', int))
+
+    def save_settings(self, settings):
+        for key, spin, _ in self._SETTINGS:
+            settings.setValue(key, getattr(self, spin).value())
+
+    def restore_settings(self, settings):
+        # Missing or unreadable values keep the defaults; out-of-range ones
+        # are clamped by the spin boxes
+        for key, spin, value_type in self._SETTINGS:
+            box = getattr(self, spin)
+            box.setValue(read_setting(settings, key, value_type, box.value()))
 
     def _make_freq_box(self, value):
         spin = QDoubleSpinBox()
