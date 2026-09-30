@@ -92,8 +92,9 @@ def test_fast_dial_spin_is_merged(app, pty_radio):
 
 
 def test_scan_end_to_end(qtbot, app, pty_radio):
-    # A station at 7.100 MHz: the radio reports 5000 while tuned there
-    station = tune_bytes(7.1, 'AM', 8000)
+    # A station at 7.100 MHz: the radio reports 5000 while tuned there (in
+    # CW with the 4800 Hz filter, as scanned with the default 5 kHz step)
+    station = tune_bytes(7.1, 'CW', 4800)
     pty_radio.signal_for = lambda tune: 5000 if tune == station else 100
     app.spinBoxVFOA.setValue(14.2)
     app.pushButtonScan.click()
@@ -111,11 +112,28 @@ def test_scan_end_to_end(qtbot, app, pty_radio):
     peak = max(scan.scanner.points, key=lambda p: p.mean)
     assert (peak.freq, peak.readings) == (7.1, (5000, 5000))
 
-    # Fast AGC before the first scan tune; afterwards Medium and 14.2 MHz again
-    back = tune_bytes(14.2, 'AM', 8000)
-    wait_until(lambda: pty_radio.commands()[-2:] == [b'G2', back])
+    # Muted, CW, 4800 Hz and Fast AGC before the first measurement, which
+    # comes between the first and second scan tunes. (The first tune itself
+    # may arrive earlier: it merges into the retune queued by the mode
+    # change, but it is calculated for CW and 4800 Hz.)
     received = pty_radio.commands()
-    assert received.index(b'G3') < received.index(tune_bytes(7.09, 'AM', 8000))
+    assert tune_bytes(7.09, 'CW', 4800) in received
+    second_scan_tune = received.index(tune_bytes(7.095, 'CW', 4800))
+    for setup in (b'C\x00\x3f', b'M3', b'W\x04', b'G3'):
+        assert received.index(setup) < second_scan_tune
+    # Afterwards everything the user had, with volume last
+    assert_restored(pty_radio)
+
+
+def assert_restored(pty_radio):
+    """After a scan (or its end by disconnecting): AM, 8000 Hz, Medium AGC,
+    14.2 MHz and the muted volumes the test user had, with volume last."""
+    back = tune_bytes(14.2, 'AM', 8000)
+    wait_until(lambda: pty_radio.commands()[-2:] == [b'A\x00\x3f', b'V\x00\x3f'])
+    received = pty_radio.commands()
+    after = received[len(received) - received[::-1].index(b'G3'):]  # after scan setup
+    assert {b'M0', b'W\x21', b'G2'} <= set(after)
+    assert [c for c in after if c[:1] == b'N'][-1] == back
 
 
 def test_disconnect_during_scan_restores_the_radio(app, pty_radio):
@@ -128,4 +146,4 @@ def test_disconnect_during_scan_restores_the_radio(app, pty_radio):
     wait_until(lambda: b'G3' in pty_radio.commands())  # scan under way
     app.pushButtonDisconnect.click()
     # The restore reached the radio before the port closed
-    assert pty_radio.commands()[-2:] == [b'G2', tune_bytes(14.2, 'AM', 8000)]
+    assert_restored(pty_radio)

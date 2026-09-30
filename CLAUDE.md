@@ -49,9 +49,11 @@ the app does and how users run it; this file covers how to work on it.
   and updates the signal meter. Settings persist via `open_settings()`
   (native QSettings storage per OS); volume is never restored. "Scan…" opens
   the scan window (one instance, closed with the app): while a scan runs the
-  radio controls are locked and AGC is `SCAN_AGC` (Fast); afterwards the
-  user's AGC and then VFO A are restored. Disconnect and closing the app stop
-  a running scan first, so it restores while the port is still open.
+  radio controls are locked and the radio is muted, in `SCAN_MODE` (CW) with
+  `scan_filter()` (the widest filter no wider than the step) and `SCAN_AGC`
+  (Fast); afterwards `_sync_radio_to_gui()` restores everything, volume last.
+  Disconnect and closing the app stop a running scan first, so it restores
+  while the port is still open.
 - `src/gui/radio_controller.py` — VFO A/B state, no Qt.
 - `src/gui/scanner.py` — signal-strength scan logic, no Qt: frequency plan
   (whole Hz, both ends, clamped), `Scanner` driven by a GUI timer calling

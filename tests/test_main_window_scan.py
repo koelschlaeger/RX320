@@ -1,10 +1,11 @@
-"""Scanning from the main window: opening the scan window, Fast AGC during
-a scan, locking and restoring the main controls, click-to-tune."""
+"""Scanning from the main window: opening the scan window, the radio set up
+for scanning (muted, CW, filter from the step, Fast AGC), locking and
+restoring the main controls, click-to-tune."""
 
 import pytest
 
 from fakes import FakeRadio
-from gui.constants import SCAN_AGC
+from gui.constants import SCAN_AGC, SCAN_MODE
 from test_main_window import button
 
 
@@ -12,12 +13,27 @@ def peak_at_7_1(freq):
     return 5000 if round(freq, 6) == 7.1 else 100
 
 
+# The radio set up for a scan with the default 5 kHz step: muted first,
+# then CW, the widest filter no wider than the step, and Fast AGC
+SCAN_SETUP = [('set_attenuation', -96, 'Both'), ('set_mode', SCAN_MODE),
+              ('set_filter', 4800), ('set_agc', SCAN_AGC)]
+
+# Everything the user had, restored afterwards, with volume last
+RESTORE = [('set_mode', 'USB'), ('set_filter', 3000), ('set_agc', 'Slow'),
+           ('set_vfo', 14.2), ('set_attenuation', -96, 'Line'),
+           ('set_attenuation', -20, 'Speaker')]
+
+
 @pytest.fixture
 def scan(connected, radio):
     """The scan window, opened from a connected main window whose user has
-    chosen Slow AGC and 14.2 MHz."""
+    chosen USB, a 3000 Hz filter, Slow AGC, 14.2 MHz and the speaker at
+    -20 dB: all different from the scan's settings."""
+    connected.modeButtonGroup.button(connected.Modes.index('USB')).click()
+    connected.sliderBW.setValue(connected.Filters.index(3000))
     connected.agcButtonGroup.button(connected.AGCModes.index('Slow')).click()
     connected.spinBoxVFOA.setValue(14.2)
+    connected.sliderVol.setValue(-20)
     radio.signal_at = peak_at_7_1
     button(connected, 'Scan…').click()
     radio.calls.clear()
@@ -29,8 +45,9 @@ def run_to_end(qtbot, scan):
     qtbot.waitUntil(lambda: scan.scanner.finished)
 
 
-def test_scan_agc_is_a_real_agc_mode(radio):
+def test_scan_settings_are_real_radio_settings(radio):
     assert SCAN_AGC in radio.AGC_MODES
+    assert SCAN_MODE in radio.MODES
 
 
 def test_scan_button_needs_a_connection(qtbot, window, radio):
@@ -49,11 +66,22 @@ def test_scan_button_opens_one_separate_window(connected):
     assert connected.scanWindow is scan  # reused, not a second window
 
 
-def test_fast_agc_during_scan_then_settings_restored(qtbot, scan, radio):
+def test_radio_set_up_for_scan_then_restored(qtbot, scan, radio):
     run_to_end(qtbot, scan)
-    assert radio.calls[0] == ('set_agc', SCAN_AGC)  # before the first tune
-    assert radio.calls[1] == ('set_vfo', 7.0)
-    assert radio.calls[-2:] == [('set_agc', 'Slow'), ('set_vfo', 14.2)]
+    assert radio.calls[:4] == SCAN_SETUP            # before the first tune
+    assert radio.calls[4] == ('set_vfo', 7.0)
+    assert radio.calls[-6:] == RESTORE
+
+
+@pytest.mark.parametrize('step_khz, bandwidth', [
+    (5, 4800), (3, 3000), (1, 900), (10, 8000),
+    (0.1, 300),   # narrower than any filter: the narrowest
+])
+def test_scan_filter_is_no_wider_than_the_step(scan, radio, step_khz, bandwidth):
+    scan.spinStep.setValue(step_khz)
+    radio.auto_measure = False
+    scan.buttonStart.click()
+    assert radio.named('set_filter')[0] == ('set_filter', bandwidth)
 
 
 def test_main_controls_locked_while_scanning(scan, radio):
@@ -64,11 +92,17 @@ def test_main_controls_locked_while_scanning(scan, radio):
     assert not main.agcGroupBox.isEnabled()
     assert not main.spinBoxVFOA.isEnabled()
     assert not main.vfoGroupBox.isEnabled()
+    assert main.labelMode_Act.text() == f'{SCAN_MODE} (scan)'
+    assert main.labelBW_Act.text() == '4800 (scan)'
     assert main.labelAGC_Act.text() == f'{SCAN_AGC} (scan)'
-    assert main.spinBoxVFOA.value() == pytest.approx(14.2)  # display unchanged
+    # The user's own settings stay on display
+    assert main.spinBoxVFOA.value() == pytest.approx(14.2)
+    assert main.sliderVol.value() == -20
 
     scan.buttonStop.click()
     assert main.modeGroupBox.isEnabled() and main.spinBoxVFOA.isEnabled()
+    assert main.labelMode_Act.text() == 'USB'
+    assert main.labelBW_Act.text() == '3000'
     assert main.labelAGC_Act.text() == 'Slow'
 
 
@@ -77,7 +111,7 @@ def test_stopping_restores_settings(scan, radio):
     scan.buttonStart.click()
     radio.measurements[0].set_result([100])
     scan.buttonStop.click()
-    assert radio.calls[-2:] == [('set_agc', 'Slow'), ('set_vfo', 14.2)]
+    assert radio.calls[-6:] == RESTORE
 
 
 def test_click_to_tune_moves_vfo_a(qtbot, scan, radio):
@@ -97,7 +131,7 @@ def test_disconnect_during_scan_stops_it_first(scan, radio, dialogs):
     button(main, 'Disconnect').click()
     assert scan.labelStatus.text() == 'Stopped'  # not "connection lost"
     # Restored while the port was still open, then disconnected
-    assert radio.calls[-3:] == [('set_agc', 'Slow'), ('set_vfo', 14.2), ('disconnect',)]
+    assert radio.calls[-7:] == RESTORE + [('disconnect',)]
     assert dialogs == []
     assert not scan.buttonStart.isEnabled()
 
@@ -132,7 +166,7 @@ def test_closing_the_app_stops_the_scan(scan, radio):
     main.close()
     assert scan.scanner.state == 'stopped'
     assert not scan.isVisible()
-    assert radio.calls[-3:] == [('set_agc', 'Slow'), ('set_vfo', 14.2), ('disconnect',)]
+    assert radio.calls[-7:] == RESTORE + [('disconnect',)]
 
 
 def open_scan_window(make_window):

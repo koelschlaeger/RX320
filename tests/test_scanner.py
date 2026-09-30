@@ -3,7 +3,7 @@
 import pytest
 
 from fakes import FakeRadio
-from gui.scanner import Scanner, ScanPoint, scan_frequencies
+from gui.scanner import Scanner, ScanPoint, scan_filter, scan_frequencies
 
 
 def peak_at_7_1(freq):
@@ -181,3 +181,23 @@ def test_nearest_point_to_a_click(radio):
     assert scanner.nearest_point(7.1021).freq == 7.1
     assert scanner.nearest_point(7.1029).freq == 7.105
     assert scanner.nearest_point(99).freq == 7.3
+
+
+# --- Filter for scanning ------------------------------------------------------------
+
+FILTERS = FakeRadio.FILTERS
+
+
+@pytest.mark.parametrize('step, bandwidth', [
+    (0.005, 4800),     # the widest filter no wider than the step
+    (0.003, 3000),     # exactly a filter width
+    (0.001, 900),
+    (0.01, 8000),      # wider than every filter: the widest
+    (0.0001, 300),     # narrower than every filter: the narrowest
+])
+def test_scan_filter(step, bandwidth):
+    assert scan_filter(step, FILTERS) == bandwidth
+
+
+def test_scanner_keeps_its_step(radio):
+    assert Scanner(radio, 7.0, 7.3, 0.005, samples=1, settle=0).step == 0.005

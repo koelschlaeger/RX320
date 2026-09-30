@@ -32,6 +32,15 @@ def scan_frequencies(start, stop, step, low=data.MINFREQ, high=data.MAXFREQ):
     return tuple(f / 1_000_000 for f in freqs)
 
 
+def scan_filter(step, filters):
+    """The filter (Hz) to scan with: the widest no wider than the step
+    (MHz), so neighbouring steps don't pick up the same signal. If even the
+    narrowest is wider than the step, the narrowest."""
+    step_hz = round(step * 1_000_000)
+    fitting = [bandwidth for bandwidth in filters if bandwidth <= step_hz]
+    return max(fitting) if fitting else min(filters)
+
+
 @dataclass(frozen=True)
 class ScanPoint:
     freq: float         # MHz
@@ -56,6 +65,7 @@ class Scanner:
         self.radio = radio
         self.frequencies = scan_frequencies(start, stop, step,
                                             radio.MIN_FREQ, radio.MAX_FREQ)
+        self.step = step        # MHz
         self.samples = samples
         self.settle = settle
         self.points = []

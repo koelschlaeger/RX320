@@ -8,9 +8,10 @@ from PyQt6.QtWidgets import (QAbstractSpinBox, QCheckBox, QComboBox, QDial,
         QMainWindow, QMessageBox, QProgressBar, QPushButton, QRadioButton,
         QButtonGroup, QSlider, QVBoxLayout, QWidget)
 
-from .constants import IMG_DIR, TuningSteps, DEFAULT_STEP, SCAN_AGC
+from .constants import IMG_DIR, TuningSteps, DEFAULT_STEP, SCAN_AGC, SCAN_MODE
 from .radio_controller import RadioController
 from .scan_window import ScanWindow
+from .scanner import scan_filter
 from .serial_utils import get_serial_ports
 from .settings_utils import read_setting
 
@@ -45,7 +46,6 @@ class MainWindow(QMainWindow):
 
         self.dialStart = 0
         self.scanWindow = None      # created when first opened
-        self._scan_return_freq = None
 
         # While connected: refreshes the status bar and watches for the
         # connection dropping (e.g. USB unplugged)
@@ -414,21 +414,28 @@ class MainWindow(QMainWindow):
         self.scanWindow.activateWindow()
 
     def on_scan_started(self):
-        # The scan tunes the radio itself: remember where we were, switch to
-        # the AGC that recovers quickest, and keep the user's hands off
-        self._scan_return_freq = self.radio.vfo_a
+        # The scan tunes the radio itself (VFO A and the controls keep the
+        # user's settings for afterwards). Mute first, so switching mode and
+        # filter makes no noise; then CW, a filter no wider than the step so
+        # neighbouring steps don't see the same signal, and the AGC that
+        # recovers quickest.
+        bandwidth = scan_filter(self.scanWindow.scanner.step, self.Filters)
+        self.sdr.set_attenuation(self.sdr.MIN_VOLUME, 'Both')
+        self.sdr.set_mode(SCAN_MODE)
+        self.sdr.set_filter(bandwidth)
         self.sdr.set_agc(SCAN_AGC)
         self._set_radio_controls_enabled(False)
+        self.labelMode_Act.setText(f'{SCAN_MODE} (scan)')
+        self.labelBW_Act.setText(f'{bandwidth} (scan)')
         self.labelAGC_Act.setText(f'{SCAN_AGC} (scan)')
 
     def on_scan_finished(self):
         self._refresh_labels()
         if not self.sdr.connected:
             return  # connection lost: reconnecting restores everything
-        # The user's AGC, then back to the frequency before the scan
-        self.sdr.set_agc(self.AGCModes[self.agcButtonGroup.checkedId()])
-        self.radio.set_vfo_a(self._scan_return_freq)
-        self._show_vfo()
+        # Everything the user had, the same way as on connect: mode, filter,
+        # AGC, VFO A, and the volume last
+        self._sync_radio_to_gui()
         self._set_radio_controls_enabled(True)
 
     def on_scan_tune(self, freq):
