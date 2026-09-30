@@ -89,3 +89,43 @@ def test_fast_dial_spin_is_merged(app, pty_radio):
     final = tune_bytes(0.53, 'AM', 8000)
     wait_until(lambda: pty_radio.commands(b'N')[-1:] == [final])
     assert len(pty_radio.commands(b'N')) < 30
+
+
+def test_scan_end_to_end(qtbot, app, pty_radio):
+    # A station at 7.100 MHz: the radio reports 5000 while tuned there
+    station = tune_bytes(7.1, 'AM', 8000)
+    pty_radio.signal_for = lambda tune: 5000 if tune == station else 100
+    app.spinBoxVFOA.setValue(14.2)
+    app.pushButtonScan.click()
+    scan = app.scanWindow
+    scan.spinStart.setValue(7.09)
+    scan.spinStop.setValue(7.11)
+    scan.spinSamples.setValue(2)
+    scan.spinSettle.setValue(0)
+    wait_until(lambda: app.sdr.sdr.msg_queue.empty())
+    pty_radio.received.clear()
+
+    scan.buttonStart.click()
+    qtbot.waitUntil(lambda: scan.scanner.finished, timeout=10000)
+    assert scan.scanner.state == 'done'
+    peak = max(scan.scanner.points, key=lambda p: p.mean)
+    assert (peak.freq, peak.readings) == (7.1, (5000, 5000))
+
+    # Fast AGC before the first scan tune; afterwards Medium and 14.2 MHz again
+    back = tune_bytes(14.2, 'AM', 8000)
+    wait_until(lambda: pty_radio.commands()[-2:] == [b'G2', back])
+    received = pty_radio.commands()
+    assert received.index(b'G3') < received.index(tune_bytes(7.09, 'AM', 8000))
+
+
+def test_disconnect_during_scan_restores_the_radio(app, pty_radio):
+    app.spinBoxVFOA.setValue(14.2)
+    app.pushButtonScan.click()
+    app.scanWindow.spinSettle.setValue(500)  # still settling at the disconnect
+    wait_until(lambda: app.sdr.sdr.msg_queue.empty())
+    pty_radio.received.clear()
+    app.scanWindow.buttonStart.click()
+    wait_until(lambda: b'G3' in pty_radio.commands())  # scan under way
+    app.pushButtonDisconnect.click()
+    # The restore reached the radio before the port closed
+    assert pty_radio.commands()[-2:] == [b'G2', tune_bytes(14.2, 'AM', 8000)]

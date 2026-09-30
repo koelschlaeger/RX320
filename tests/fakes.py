@@ -161,13 +161,18 @@ _ARG_LEN = {b'N': 6, b'W': 1, b'A': 2, b'V': 2, b'C': 2, b'M': 1, b'G': 1, b'X':
 class PtyRadio:
     """A pseudo-terminal pair acting as the physical radio: the app opens
     .port like a real serial device. Records every command received and
-    answers signal-strength polls with .signal."""
+    answers signal-strength polls with .signal, or with signal_for(last tune
+    command) when that is set."""
 
     def __init__(self):
         import pty
         self._master, self._slave = pty.openpty()
         self.port = os.ttyname(self._slave)
         self.signal = 90
+        # Optional: signal_for(last tune command) -> reading, so a scan sees
+        # a signal that depends on the frequency (None: always .signal)
+        self.signal_for = None
+        self._last_tune = None
         self.received = []
         self._buffer = bytearray()
         self._stop = threading.Event()
@@ -199,9 +204,13 @@ class PtyRadio:
                 return
             command = bytes(self._buffer[:size - 1])
             del self._buffer[:size]
+            if letter == b'N':
+                self._last_tune = command
             if letter == b'X':
+                signal = (self.signal if self.signal_for is None
+                          else self.signal_for(self._last_tune))
                 try:
-                    os.write(self._master, b'X' + self.signal.to_bytes(2, 'big') + b'\r')
+                    os.write(self._master, b'X' + signal.to_bytes(2, 'big') + b'\r')
                 except OSError:
                     return  # unplugged
             else:

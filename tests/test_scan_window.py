@@ -5,6 +5,7 @@ import math
 import pytest
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QWidget
 
 from fakes import FakeRadio
 from gui.scan_window import ScanWindow, format_duration
@@ -76,6 +77,31 @@ def test_invalid_range_disables_start(scan):
     assert 'stop must be above start' in scan.labelEstimate.text()
     scan.spinStop.setValue(7.3)
     assert scan.buttonStart.isEnabled()
+
+
+def test_no_scanning_while_disconnected(scan):
+    scan.set_connected(False)
+    assert not scan.buttonStart.isEnabled()
+    assert 'connect' in scan.labelEstimate.text().lower()
+    scan.set_connected(True)
+    assert scan.buttonStart.isEnabled()
+    assert scan.labelEstimate.text() == '61 steps, about 25 s'
+
+
+def test_scan_ending_after_disconnect_keeps_start_disabled(qtbot, scan, radio):
+    radio.auto_measure = False
+    scan.buttonStart.click()
+    scan.set_connected(False)        # told while the scan was still running
+    radio.measurements[0].cancel()   # ...which then fails
+    qtbot.waitUntil(lambda: scan.scanner.finished)
+    assert not scan.buttonStart.isEnabled()
+
+
+def test_stays_a_separate_window_with_a_parent(qtbot, radio):
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    window = ScanWindow(radio, parent)
+    assert window.isWindow()
 
 
 @pytest.mark.parametrize('seconds, text', [

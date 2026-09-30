@@ -37,8 +37,11 @@ class ScanWindow(QWidget):
 
     def __init__(self, sdr, parent=None):
         super().__init__(parent)
+        # Its own window even when given a parent (which it closes with)
+        self.setWindowFlag(Qt.WindowType.Window)
         self.sdr = sdr
         self.scanner = None
+        self._connected = sdr.connected
         self.setWindowTitle('RX320 Scan')
 
         self.pollTimer = QTimer(self)
@@ -157,16 +160,28 @@ class ScanWindow(QWidget):
             self.labelEstimate.setText(f'Invalid scan: {error}')
             self.buttonStart.setEnabled(False)
             return
+        if not self._connected:
+            self.labelEstimate.setText('Connect to the radio to scan')
+            self.buttonStart.setEnabled(False)
+            return
         steps = len(plan.frequencies)
         self.labelEstimate.setText(
             f'{steps} steps, about {format_duration(plan.estimated_duration())}')
         self.buttonStart.setEnabled(self.scanner is None or self.scanner.finished)
 
+    def set_connected(self, connected):
+        """Called by the main window: Start is only enabled while connected."""
+        self._connected = connected
+        self._update_estimate()
+
     def _set_scanning(self, scanning):
         for spin in self._inputs:
             spin.setEnabled(not scanning)
-        self.buttonStart.setEnabled(not scanning)
         self.buttonStop.setEnabled(scanning)
+        if scanning:
+            self.buttonStart.setEnabled(False)
+        else:
+            self._update_estimate()  # Start only if the inputs are valid and connected
 
     def start_scan(self):
         self.scanner = self._plan()

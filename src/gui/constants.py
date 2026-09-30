@@ -17,3 +17,4 @@ DEFAULT_SCAN_STOP = 7.3         # MHz
 DEFAULT_SCAN_STEP = 5.0         # kHz
 DEFAULT_SCAN_SAMPLES = 5        # readings averaged per frequency
 DEFAULT_SCAN_SETTLE = 100       # ms to wait after tuning before measuring
+SCAN_AGC = 'Fast'               # AGC while scanning: recovers quickest between steps

@@ -8,8 +8,9 @@ from PyQt6.QtWidgets import (QAbstractSpinBox, QCheckBox, QComboBox, QDial,
         QMainWindow, QMessageBox, QProgressBar, QPushButton, QRadioButton,
         QButtonGroup, QSlider, QVBoxLayout, QWidget)
 
-from .constants import IMG_DIR, TuningSteps, DEFAULT_STEP
+from .constants import IMG_DIR, TuningSteps, DEFAULT_STEP, SCAN_AGC
 from .radio_controller import RadioController
+from .scan_window import ScanWindow
 from .serial_utils import get_serial_ports
 
 
@@ -42,6 +43,8 @@ class MainWindow(QMainWindow):
         self.Filters = self.sdr.FILTERS
 
         self.dialStart = 0
+        self.scanWindow = None      # created when first opened
+        self._scan_return_freq = None
 
         # While connected: refreshes the status bar and watches for the
         # connection dropping (e.g. USB unplugged)
@@ -168,6 +171,7 @@ class MainWindow(QMainWindow):
         self.pushButtonConnect = self._make_button('Connect', slot=self._connect)
         self.pushButtonDisconnect = self._make_button('Disconnect', slot=self._disconnect)
         self.pushButtonMute = self._make_button('Mute', slot=self.on_mute)
+        self.pushButtonScan = self._make_button('Scan…', slot=self.on_scan)
         self.pushButtonRefreshSerialPorts = self._make_button('Refresh', slot=self._refresh_serial_ports)
 
         self.bottomLayout.addWidget(pushButtonQuit)
@@ -176,6 +180,7 @@ class MainWindow(QMainWindow):
         self.bottomLayout.addWidget(self.pushButtonConnect)
         self.bottomLayout.addWidget(self.pushButtonDisconnect)
         self.bottomLayout.addWidget(self.pushButtonMute)
+        self.bottomLayout.addWidget(self.pushButtonScan)
 
     def _create_vfo_group(self):
         self.vfoGroupBox = QGroupBox()
@@ -381,19 +386,62 @@ class MainWindow(QMainWindow):
         self._show_vfo()
 
     def set_controls_enabled(self, enabled: bool):
-        for widget in self._controls:
-            widget.setDisabled(not enabled)
+        self._set_radio_controls_enabled(enabled)
+        self.pushButtonScan.setEnabled(enabled)
         # Connection controls
         for widget in (self.pushButtonConnect, self.pushButtonRefreshSerialPorts,
                        self.comboBoxSerialPort):
             widget.setEnabled(not enabled)
         self.pushButtonDisconnect.setEnabled(enabled)
 
+    def _set_radio_controls_enabled(self, enabled):
+        # Everything that changes the radio's settings (also locked while
+        # the scan window is tuning)
+        for widget in self._controls:
+            widget.setDisabled(not enabled)
+
+    def on_scan(self):
+        if self.scanWindow is None:
+            self.scanWindow = ScanWindow(self.sdr, self)
+            self.scanWindow.scanStarted.connect(self.on_scan_started)
+            self.scanWindow.scanFinished.connect(self.on_scan_finished)
+            self.scanWindow.tuneRequested.connect(self.on_scan_tune)
+        self.scanWindow.set_connected(self.sdr.connected)
+        self.scanWindow.show()
+        self.scanWindow.raise_()
+        self.scanWindow.activateWindow()
+
+    def on_scan_started(self):
+        # The scan tunes the radio itself: remember where we were, switch to
+        # the AGC that recovers quickest, and keep the user's hands off
+        self._scan_return_freq = self.radio.vfo_a
+        self.sdr.set_agc(SCAN_AGC)
+        self._set_radio_controls_enabled(False)
+        self.labelAGC_Act.setText(f'{SCAN_AGC} (scan)')
+
+    def on_scan_finished(self):
+        self._refresh_labels()
+        if not self.sdr.connected:
+            return  # connection lost: reconnecting restores everything
+        # The user's AGC, then back to the frequency before the scan
+        self.sdr.set_agc(self.AGCModes[self.agcButtonGroup.checkedId()])
+        self.radio.set_vfo_a(self._scan_return_freq)
+        self._show_vfo()
+        self._set_radio_controls_enabled(True)
+
+    def on_scan_tune(self, freq):
+        # Click-to-tune in the scan window (only offered after a scan)
+        if self.sdr.connected:
+            self.radio.set_vfo_a(freq)
+            self._show_vfo()
+
     def _quit(self):
         self.close()
 
     def closeEvent(self, event):
         # Quit and the window's X button both end up here
+        if self.scanWindow is not None:
+            self.scanWindow.close()  # stops a running scan and restores the radio
         self._save_settings()
         self._disconnect()
         super().closeEvent(event)
@@ -486,6 +534,8 @@ class MainWindow(QMainWindow):
         self.labelConnection.setText(f'Connected: {serialPort}')
         self.progressBarSignal.show()
         self.statusTimer.start()
+        if self.scanWindow is not None:
+            self.scanWindow.set_connected(True)
 
     def _sync_radio_to_gui(self):
         # Push every GUI setting to the radio, which the driver has just reset
@@ -501,6 +551,11 @@ class MainWindow(QMainWindow):
 
     def _disconnect(self):
         self.statusTimer.stop()
+        if self.scanWindow is not None:
+            # Stop a running scan first, so it restores the radio while the
+            # port is still open
+            self.scanWindow.stop_scan()
+            self.scanWindow.set_connected(False)
 
         # Disable control surfaces
         self.set_controls_enabled(False)
