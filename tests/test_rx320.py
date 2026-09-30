@@ -99,3 +99,19 @@ def test_disconnect_is_safe_any_time():
     assert not radio.connected
     radio.disconnect()
     radio.disconnect()
+
+
+def test_measure_signal_requires_a_connection():
+    with pytest.raises(ConnectionError):
+        RX320().measure_signal(3)
+
+
+def test_measure_signal_reads_from_the_radio():
+    radio = RX320()
+    radio.sdr = RX320_Driver('/dev/null')
+    radio.sdr.com = FakeSerial()
+    radio.sdr.open_serial()
+    try:
+        assert radio.measure_signal(2, settle=0).result(timeout=3) == [90, 90]
+    finally:
+        radio.disconnect()

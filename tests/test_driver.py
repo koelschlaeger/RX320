@@ -177,3 +177,77 @@ def test_open_failure_returns_false():
     d = RX320_Driver('/dev/does-not-exist')
     assert d.open_serial() is False
     assert not d.is_open()
+
+
+# --- Measuring signal strength (for scans) ---------------------------------
+
+def test_measurement_is_queued_after_pending_commands(driver):
+    driver.set_vfo(7.2, 'USB', 3000)
+    future = driver.measure(3, settle=0.1)
+    assert [mode for _, mode in driver.msg_queue.queue] == ['W', 'MEASURE']
+    assert not future.done()
+
+
+def test_commands_are_not_merged_across_a_measurement(driver):
+    # A measurement must see exactly the settings queued before it, so a
+    # later tune may not replace the one waiting ahead of it.
+    driver.set_vfo(7.0, 'USB', 3000)
+    driver.measure(1)
+    driver.set_vfo(7.1, 'USB', 3000)
+    assert queued(driver)[0] == tune_bytes(7.0, 'USB', 3000)
+    assert queued(driver)[2] == tune_bytes(7.1, 'USB', 3000)
+
+
+def test_measurement_needs_at_least_one_sample(driver):
+    with pytest.raises(ValueError):
+        driver.measure(0)
+
+
+def test_measurement_samples_right_after_the_tune(running):
+    running.set_vfo(7.2, 'USB', 3000)
+    future = running.measure(3)
+    assert future.result(timeout=3) == [90, 90, 90]
+    written = running.com.written
+    tune = written.index(tune_bytes(7.2, 'USB', 3000) + b'\r')
+    assert written[tune + 1:tune + 4] == [b'X\r'] * 3
+
+
+def test_measurement_waits_the_settle_time(running):
+    start = time.monotonic()
+    running.measure(1, settle=0.3).result(timeout=3)
+    assert time.monotonic() - start >= 0.3
+
+
+def test_measurement_updates_the_meter_reading(running):
+    running.com.reply = b'X\x01\x00\r'
+    assert running.measure(2).result(timeout=3) == [256, 256]
+    assert running.rsi == 256
+
+
+def test_measurement_skips_garbled_replies(running):
+    running.com.reply = b'Z\r\x00\x00'
+    assert running.measure(3).result(timeout=3) == []
+
+
+def test_close_ends_running_and_waiting_measurements(running):
+    settling = running.measure(1, settle=5)
+    waiting = running.measure(1)
+    wait_until(lambda: settling.running())
+    start = time.monotonic()
+    running.close_serial()
+    assert time.monotonic() - start < 1  # the settle wait is interrupted
+    assert isinstance(settling.exception(timeout=1), ConnectionError)
+    assert waiting.cancelled()
+
+
+def test_lost_port_ends_measurements(running):
+    settling = running.measure(1, settle=0.3)
+    waiting = running.measure(1)   # queued behind it when the port dies
+    wait_until(settling.running)
+    running.com.fail()
+    assert isinstance(settling.exception(timeout=3), OSError)
+    wait_until(waiting.done)
+    assert waiting.cancelled()
+    # The worker has stopped: later requests are cancelled at once
+    wait_until(lambda: not running.queue_thread.is_alive())
+    assert running.measure(1).cancelled()

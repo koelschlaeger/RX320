@@ -5,6 +5,7 @@ Created on Sun May  1 14:58:07 2022
 @author: KOelschlaeger
 """
 import struct
+from concurrent.futures import Future
 from queue import Empty, Queue
 from threading import Event, Thread
 
@@ -64,6 +65,7 @@ class RX320_Driver():
     def close_serial(self):
         # Drop pending commands, let the worker finish, then close the port
         self._stop.set()
+        self._cancel_waiting_measurements()
         with self.msg_queue.mutex:
             self.msg_queue.queue.clear()
         if self.queue_thread:
@@ -81,8 +83,12 @@ class RX320_Driver():
             # 'C' sets both volumes, so it also supersedes a waiting 'A' (line)
             # or 'V' (speaker); every other command only replaces its own kind
             kinds = b'ACV' if msg[:1] == b'C' else msg[:1]
+            # Never merge across a waiting measurement: it must see exactly
+            # the settings that were queued before it
+            first = max((i + 1 for i, (_, mode) in enumerate(pending)
+                         if mode == 'MEASURE'), default=0)
             matches = [i for i, (queued, mode) in enumerate(pending)
-                       if mode == 'W' and queued[:1] in kinds]
+                       if i >= first and mode == 'W' and queued[:1] in kinds]
             if matches:
                 pending[matches[0]] = (msg, 'W')
                 for i in reversed(matches[1:]):
@@ -143,6 +149,21 @@ class RX320_Driver():
         # Send X to request signal strength
         self.msg_queue.put((struct.pack('c', b'X'), 'RW'))
 
+    def measure(self, samples, settle=0.0):
+        # Signal strength for scans. Runs after everything already queued
+        # (e.g. a tune) has been sent: waits `settle` seconds, then takes
+        # `samples` readings back to back. Returns a Future that resolves to
+        # the list of valid readings (garbled replies are skipped). It is
+        # cancelled, or fails with ConnectionError, if the port closes first.
+        if samples < 1:
+            raise ValueError('samples must be at least 1')
+        future = Future()
+        self.msg_queue.put(((samples, settle, future), 'MEASURE'))
+        if self._stop.is_set():
+            # Closed or port lost: no worker will ever run it
+            self._cancel_waiting_measurements()
+        return future
+
     def _power_up(self):
         # Reprogramming the radio at power-up requires setting the MODE,
         # FREQUENCY, FILTER and VOLUME level. To prevent unwanted audio
@@ -181,7 +202,38 @@ class RX320_Driver():
                         self.rsi = value
                 elif mode == 'W':
                     self._command_write(msg)
+                elif mode == 'MEASURE':
+                    self._measure(*msg)
             except (OSError, serial.SerialException):
                 # Port went away (e.g. USB unplugged); stop the worker
                 self._stop.set()
+        self._cancel_waiting_measurements()
+
+    def _measure(self, samples, settle, future):
+        if not future.set_running_or_notify_cancel():
+            return  # cancelled while it waited in the queue
+        try:
+            if self._stop.wait(settle):  # returns early if the port closes
+                raise ConnectionError('port closed during measurement')
+            readings = []
+            for _ in range(samples):
+                if self._stop.is_set():
+                    raise ConnectionError('port closed during measurement')
+                value = self._command_read_write(b'X')
+                if value is not None:
+                    readings.append(value)
+                    self.rsi = value
+            future.set_result(readings)
+        except (OSError, serial.SerialException) as error:
+            future.set_exception(error)
+            raise  # let the worker stop as for any lost port
+
+    def _cancel_waiting_measurements(self):
+        # Collect under the queue lock, cancel outside it: cancel() runs any
+        # done-callbacks, which might queue new commands.
+        with self.msg_queue.mutex:
+            futures = [msg[2] for msg, mode in self.msg_queue.queue
+                       if mode == 'MEASURE']
+        for future in futures:
+            future.cancel()
 

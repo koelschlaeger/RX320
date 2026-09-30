@@ -55,6 +55,13 @@ class RX320():
         if self.sdr is not None:
             self.sdr.close_serial()
 
+    def measure_signal(self, samples, settle=0.0):
+        # Readings taken after everything already sent (e.g. a tune) has
+        # reached the radio. Returns a Future of a list of raw readings.
+        if not self.connected:
+            raise ConnectionError('not connected')
+        return self.sdr.measure(samples, settle)
+
     def set_attenuation(self, value, target):
         # slider dB [-96, 0] -> attenuation code [63, 0]
         if target not in self._TARGETS:
