@@ -19,8 +19,12 @@ and keeps the radio in sync with them.
   bandwidths from 300 Hz to 8 kHz
 - Separate line-out and speaker volume, optionally linked, with mute
 - Signal strength meter
+- Band scanner (**Scan…**): sweeps a frequency range, plots signal strength
+  live, and tunes the radio to a point you click in the plot
 - Detects a lost connection (e.g. an unplugged USB adapter)
 - Remembers your settings between sessions; volume always starts muted
+
+![The scan window after sweeping 0.5 to 1.2 MHz in 5 kHz steps, with the marker on 865 kHz](doc/screenshot_scanner.png)
 
 ## Requirements
 
